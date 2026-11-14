@@ -92,14 +92,19 @@ canvas.addEventListener('pointerup', (event) => { const drag=state.dragged; if(!
 
 // AI Lab — deliberately lazy. These URLs are not contacted until one of the three
 // buttons below is pressed by the person using the wall.
-const AI = { mp:null, vision:null, face:null, people:null, clip:null };
+const AI = { mp:null, vision:null, face:null, people:null, clip:null, cacheName:'gelato-ai-models-v1' };
 const aiStatus = (text) => { $('#ai-status').textContent = text; };
 async function visionRuntime() {
   if (!AI.mp) AI.mp = await import(/* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs');
   if (!AI.vision) AI.vision = await AI.mp.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm');
   return AI;
 }
-async function modelBytes(url) { const response = await fetch(url); if (!response.ok) throw new Error(`model download failed (${response.status})`); return new Uint8Array(await response.arrayBuffer()); }
+async function modelBytes(url) {
+  // Cache Storage survives a reload (subject to browser storage eviction), so face
+  // and person models are fetched once rather than every visit.
+  if ('caches' in window) { const cache=await caches.open(AI.cacheName); const saved=await cache.match(url); if(saved){aiStatus('Using cached AI model…');return new Uint8Array(await saved.arrayBuffer());} const response=await fetch(url);if(!response.ok)throw new Error(`model download failed (${response.status})`);await cache.put(url,response.clone());return new Uint8Array(await response.arrayBuffer()); }
+  const response=await fetch(url); if (!response.ok) throw new Error(`model download failed (${response.status})`); return new Uint8Array(await response.arrayBuffer());
+}
 async function scanWith(kind) {
   if (!state.items.length) return toast('Upload images before running a scan');
   const button = kind === 'face' ? $('#btn-faces') : $('#btn-people'); button.disabled = true;
@@ -131,6 +136,8 @@ async function runClip() {
     aiStatus('Loading CLIP runtime and model (~85 MB)…');
     if (!AI.clip) {
       const transformers=await import(/* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3/dist/transformers.min.js');
+      // Transformers.js persists the CLIP shards in browser Cache Storage.
+      if (transformers.env) { transformers.env.allowLocalModels=false; transformers.env.useBrowserCache=true; }
       const [processor,visionModel,RawImage]=await Promise.all([transformers.AutoProcessor.from_pretrained('Xenova/clip-vit-base-patch32'),transformers.CLIPVisionModelWithProjection.from_pretrained('Xenova/clip-vit-base-patch32'),transformers.RawImage]);
       AI.clip={processor,visionModel,RawImage};
     }
@@ -144,6 +151,7 @@ async function runClip() {
   finally { button.disabled=false; }
 }
 $('#btn-faces').onclick=()=>scanWith('face'); $('#btn-people').onclick=()=>scanWith('people'); $('#btn-clip').onclick=runClip;
+const clearAiCache=document.createElement('button');clearAiCache.className='link';clearAiCache.textContent='Clear downloaded AI models';clearAiCache.style.marginTop='6px';$('#ai-status').after(clearAiCache);clearAiCache.onclick=async()=>{if(!confirm('Remove the downloaded AI models from this browser?'))return;AI.face=AI.people=AI.clip=null;if('caches'in window){await caches.delete(AI.cacheName);await caches.delete('transformers-cache');}aiStatus('Downloaded AI models cleared');toast('AI model cache cleared');};
 
 // Replaces the quick colour PCA after CLIP is available. This is the same
 // power-iteration approach used by the reference workbench, over every vector dimension.
