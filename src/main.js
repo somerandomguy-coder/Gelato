@@ -3,7 +3,7 @@ import { packLayout } from './viz-packer.js';
 
 const $ = (s) => document.querySelector(s);
 const canvas = $('#wall'), ctx = canvas.getContext('2d');
-const state = { items: [], layout: 'pack', size: 170, captions: false, tight: true, scale: 1, x: 0, y: 0, pointer: null, fullUrl: null, dragged: null, selected: new Set(), marquee: null, faceFilter:'all', peopleFilter:'all', page:1, pageSize:500 };
+const state = { items: [], layout: 'pack', size: 170, captions: false, tight: true, scale: 1, x: 0, y: 0, pointer: null, fullUrl: null, dragged: null, selected: new Set(), marquee: null, hovered:null, gesture:null, faceFilter:'all', peopleFilter:'all', page:1, pageSize:500 };
 const labels = { pack: 'Tight board', grid: 'Browse', pca: 'Visual map · PCA', umap: 'Style neighbourhoods · UMAP', color: 'Colour mood · colour grade' };
 const toast = (message) => { const el = $('#toast'); el.textContent = message; el.classList.add('show'); clearTimeout(toast.timer); toast.timer = setTimeout(() => el.classList.remove('show'), 2200); };
 const workerPending=new Map(); let workerSerial=0;
@@ -52,7 +52,7 @@ async function loadFiles(files,label='images') {
 }
 function hit(clientX,clientY) { const r=canvas.getBoundingClientRect(),wx=(clientX-r.left-state.x)/state.scale,wy=(clientY-r.top-state.y)/state.scale;return [...state.items].reverse().find(i=>wx>=i.x&&wx<=i.x+i.dw&&wy>=i.y&&wy<=i.y+i.dh); }
 function open(item) { if(state.fullUrl)URL.revokeObjectURL(state.fullUrl);state.fullUrl=URL.createObjectURL(item.file);$('#full-image').src=state.fullUrl;$('#full-caption').textContent=`${item.name} · full resolution`;$('#viewer').showModal(); }
-canvas.addEventListener('pointerdown',e=>{state.pointer={x:e.clientX,y:e.clientY,px:state.x,py:state.y,moved:false};canvas.setPointerCapture(e.pointerId)});canvas.addEventListener('pointermove',e=>{const p=state.pointer;if(!p)return;const dx=e.clientX-p.x,dy=e.clientY-p.y;if(Math.hypot(dx,dy)>4)p.moved=true;if(p.moved){state.x=p.px+dx;state.y=p.py+dy;canvas.classList.add('dragging');draw()}});canvas.addEventListener('pointerup',e=>{const p=state.pointer;state.pointer=null;canvas.classList.remove('dragging');if(p&&!p.moved){const item=hit(e.clientX,e.clientY);if(item)open(item)}});canvas.addEventListener('wheel',e=>{e.preventDefault();const old=state.scale,next=Math.max(.06,Math.min(3,old*(e.deltaY<0?1.12:.89))),r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;state.x=x-(x-state.x)*next/old;state.y=y-(y-state.y)*next/old;state.scale=next;draw()},{passive:false});
+canvas.addEventListener('wheel',e=>{e.preventDefault();const old=state.scale,next=Math.max(.06,Math.min(3,old*(e.deltaY<0?1.12:.89))),r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;state.x=x-(x-state.x)*next/old;state.y=y-(y-state.y)*next/old;state.scale=next;draw()},{passive:false});
 $('#btn-folder').onclick=()=>$('#folder-input').click();$('#btn-empty-folder').onclick=()=>$('#folder-input').click();$('#btn-images').onclick=()=>$('#image-input').click();$('#folder-input').onchange=e=>{loadFiles(e.target.files,'Folder');e.target.value=''};$('#image-input').onchange=e=>{loadFiles(e.target.files,'Library');e.target.value=''};$('#btn-fit').onclick=fit;$('#btn-clear').onclick=()=>{if(!state.items.length||confirm('Clear this image wall?')){state.items.forEach(i=>i.thumb.close?.());state.items=[];state.scale=1;state.x=state.y=0;$('#dataset-name').textContent='No images loaded';draw()}};$('#toggle-captions').onchange=e=>{state.captions=e.target.checked;relayout({fitView:true})};$('#toggle-tight').onchange=e=>{state.tight=e.target.checked;relayout({fitView:true})};$('#size-range').oninput=e=>{state.size=+e.target.value;relayout()};$('#layout-controls').onclick=e=>{const button=e.target.closest('[data-layout]');if(!button)return;state.layout=button.dataset.layout;document.querySelectorAll('.layout').forEach(x=>x.classList.toggle('active',x===button));$('#layout-caption').textContent=labels[state.layout];relayout({fitView:true})};$('#btn-close').onclick=()=>$('#viewer').close();$('#viewer').addEventListener('close',()=>{if(state.fullUrl){URL.revokeObjectURL(state.fullUrl);state.fullUrl=null}});
 function svgFile(color,accent,name){return new File([`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="${400+name.length*9}"><rect width="100%" height="100%" fill="${color}"/><circle cx="580" cy="170" r="160" fill="${accent}"/><path d="M0 470Q250 250 800 480V700H0Z" fill="#fff" opacity=".32"/></svg>`],`${name}.svg`,{type:'image/svg+xml'})}$('#btn-sample').onclick=()=>loadFiles([svgFile('#e9be92','#d86b4b','Small rituals'),svgFile('#aec5c8','#5c8391','Open air'),svgFile('#d7d1b6','#778c6c','Field notes'),svgFile('#d6bed0','#976f88','Soft strength'),svgFile('#2e3030','#e4bf5c','Night work')],'Sample');resize();draw();
 
@@ -92,15 +92,6 @@ function pullFive(anchor) {
 }
 // Right-click owns one interaction only: pull similar images. It never falls through
 // to the normal click/release handler that opens the full-resolution viewer.
-canvas.addEventListener('contextmenu', (event) => { event.preventDefault(); const item=hit(event.clientX,event.clientY); if(item)pullFive(item); });
-canvas.addEventListener('pointerdown', (event) => {
-  if (event.button !== 0) return; const item = hit(event.clientX, event.clientY); if (!item) return;
-  event.stopImmediatePropagation(); state.dragged = { item, moved:false }; canvas.setPointerCapture(event.pointerId);
-}, true);
-canvas.addEventListener('pointermove', (event) => {
-  const drag = state.dragged; if (!drag) return; event.stopImmediatePropagation();
-}, true);
-canvas.addEventListener('pointerup', (event) => { const drag=state.dragged; if(!drag)return; event.stopImmediatePropagation(); state.dragged=null; open(drag.item); }, true);
 
 // AI Lab — deliberately lazy. These URLs are not contacted until one of the three
 // buttons below is pressed by the person using the wall.
@@ -193,10 +184,6 @@ $('#tidy-selected').onclick=tidySelected;$('#reset-layout').onclick=resetLayout;
 $('#name-selected').onclick=()=>{const name=prompt('Who is in these selected photos? (This is a local label.)');if(!name?.trim())return;state.items.filter(item=>state.selected.has(item.id)).forEach(item=>{item.peopleName=name.trim();});toast(`Named ${state.selected.size} photos “${name.trim()}”`);draw();};
 const drawWithAxes=draw;
 draw=function drawSelections(){drawWithAxes();if(!state.selected.size&&!state.marquee)return;ctx.save();ctx.strokeStyle='#1d1d1b';ctx.lineWidth=2;for(const item of state.items){if(!state.selected.has(item.id))continue;ctx.strokeRect(state.x+item.x*state.scale-3,state.y+item.y*state.scale-3,item.dw*state.scale+6,item.dh*state.scale+6);}if(state.marquee){const m=state.marquee;ctx.fillStyle='rgba(29,29,27,.08)';ctx.strokeStyle='#1d1d1b';ctx.setLineDash([5,4]);ctx.strokeRect(Math.min(m.x,m.nowX),Math.min(m.y,m.nowY),Math.abs(m.nowX-m.x),Math.abs(m.nowY-m.y));ctx.fillRect(Math.min(m.x,m.nowX),Math.min(m.y,m.nowY),Math.abs(m.nowX-m.x),Math.abs(m.nowY-m.y));ctx.setLineDash([]);}ctx.restore();};
-canvas.addEventListener('pointerdown',(event)=>{if(event.button!==0||!event.shiftKey||hit(event.clientX,event.clientY))return;event.stopImmediatePropagation();state.marquee={x:event.clientX,y:event.clientY,nowX:event.clientX,nowY:event.clientY};canvas.setPointerCapture(event.pointerId);draw();},true);
-canvas.addEventListener('pointermove',(event)=>{if(!state.marquee)return;event.stopImmediatePropagation();state.marquee.nowX=event.clientX;state.marquee.nowY=event.clientY;const left=Math.min(state.marquee.x,event.clientX),right=Math.max(state.marquee.x,event.clientX),top=Math.min(state.marquee.y,event.clientY),bottom=Math.max(state.marquee.y,event.clientY),rect=canvas.getBoundingClientRect();state.selected=new Set(state.items.filter(item=>{const x=rect.left+state.x+item.x*state.scale,y=rect.top+state.y+item.y*state.scale;return x<right&&x+item.dw*state.scale>left&&y<bottom&&y+item.dh*state.scale>top;}).map(item=>item.id));draw();},true);
-canvas.addEventListener('pointerup',(event)=>{if(!state.marquee)return;event.stopImmediatePropagation();state.marquee=null;refreshSelectionToolbar();},true);
-canvas.addEventListener('pointerdown',(event)=>{if(event.button!==2)return;event.preventDefault();event.stopImmediatePropagation();},true);
 
 function matchesAiFilter(item) {
   const faces=item.ai?.face, people=item.ai?.people;
@@ -232,6 +219,35 @@ function updatePageUi(){const filtered=state.items.filter(matchesAiFilter),pages
 const drawWithPages=draw;draw=function pagedDraw(){updatePageUi();drawWithPages();};
 function fitPage(){const filtered=state.items.filter(matchesAiFilter).slice((state.page-1)*state.pageSize,state.page*state.pageSize);if(!filtered.length)return;const b=filtered.reduce((box,item)=>({minX:Math.min(box.minX,item.x),minY:Math.min(box.minY,item.y),maxX:Math.max(box.maxX,item.x+item.dw),maxY:Math.max(box.maxY,item.y+item.dh)}),{minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity}),r=canvas.getBoundingClientRect();state.scale=Math.max(.08,Math.min(1.4,(r.width-90)/(b.maxX-b.minX),(r.height-90)/(b.maxY-b.minY)));state.x=(r.width-(b.maxX-b.minX)*state.scale)/2-b.minX*state.scale;state.y=(r.height-(b.maxY-b.minY)*state.scale)/2-b.minY*state.scale;draw();}
 $('#page-prev').onclick=()=>{state.page=Math.max(1,state.page-1);fitPage();};$('#page-next').onclick=()=>{const total=Math.ceil(state.items.filter(matchesAiFilter).length/state.pageSize);state.page=Math.min(total,state.page+1);fitPage();};$('#page-size').onchange=e=>{state.pageSize=+e.target.value;state.page=1;fitPage();};
+
+// One pointer state machine. Coordinates are canvas-local so the sidebar never
+// shifts hit-testing, highlights, or marquee selection away from the cursor.
+const localPoint=(event)=>{const r=canvas.getBoundingClientRect();return{x:event.clientX-r.left,y:event.clientY-r.top};};
+canvas.addEventListener('pointerdown',(event)=>{
+  if(event.button!==0)return;
+  const point=localPoint(event), item=hit(event.clientX,event.clientY);
+  if(event.shiftKey&&!item){state.gesture={kind:'marquee',start:point,now:point};state.marquee={x:point.x,y:point.y,nowX:point.x,nowY:point.y};}
+  else if(item){state.gesture={kind:'item',item,start:point,x:item.x,y:item.y,moved:false};}
+  else {state.gesture={kind:'pan',start:point,x:state.x,y:state.y,moved:false};canvas.classList.add('dragging');}
+  canvas.setPointerCapture(event.pointerId); draw();
+});
+canvas.addEventListener('pointermove',(event)=>{
+  const point=localPoint(event), gesture=state.gesture;
+  if(!gesture){const next=hit(event.clientX,event.clientY);if(next!==state.hovered){state.hovered=next;canvas.style.cursor=next?'pointer':'grab';draw();}return;}
+  const dx=point.x-gesture.start.x,dy=point.y-gesture.start.y;
+  if(gesture.kind==='pan'){if(Math.hypot(dx,dy)>3)gesture.moved=true;state.x=gesture.x+dx;state.y=gesture.y+dy;}
+  if(gesture.kind==='item'){if(Math.hypot(dx,dy)>4)gesture.moved=true;if(gesture.moved){gesture.item.x=gesture.x+dx/state.scale;gesture.item.y=gesture.y+dy/state.scale;gesture.item.manual=true;}}
+  if(gesture.kind==='marquee'){gesture.now=point;state.marquee.nowX=point.x;state.marquee.nowY=point.y;const left=Math.min(gesture.start.x,point.x),right=Math.max(gesture.start.x,point.x),top=Math.min(gesture.start.y,point.y),bottom=Math.max(gesture.start.y,point.y);state.selected=new Set(state.items.filter(item=>{const x=state.x+item.x*state.scale,y=state.y+item.y*state.scale;return x<right&&x+item.dw*state.scale>left&&y<bottom&&y+item.dh*state.scale>top;}).map(item=>item.id));}
+  draw();
+});
+canvas.addEventListener('pointerup',(event)=>{
+  const gesture=state.gesture;if(!gesture)return;state.gesture=null;canvas.classList.remove('dragging');
+  if(gesture.kind==='item'&&!gesture.moved)open(gesture.item);
+  if(gesture.kind==='marquee'){state.marquee=null;refreshSelectionToolbar();} draw();
+});
+canvas.addEventListener('pointerleave',()=>{if(!state.gesture&&state.hovered){state.hovered=null;draw();}});
+canvas.addEventListener('contextmenu',(event)=>{event.preventDefault();const item=hit(event.clientX,event.clientY);if(item)pullFive(item);});
+const drawWithPointerFeedback=draw;draw=function pointerFeedbackDraw(){drawWithPointerFeedback();if(!state.hovered)return;const item=state.hovered;ctx.save();ctx.strokeStyle='#e16d45';ctx.lineWidth=2;ctx.strokeRect(state.x+item.x*state.scale-3,state.y+item.y*state.scale-3,item.dw*state.scale+6,item.dh*state.scale+6);ctx.restore();};
 const filterControls=document.createElement('div');filterControls.style.cssText='display:none;margin-top:8px;gap:5px;flex-wrap:wrap';filterControls.id='ai-filters';document.querySelector('#ai-status').after(filterControls);
 function renderAiFilters(){
   const facesDone=state.items.some(item=>item.ai?.face!==undefined),peopleDone=state.items.some(item=>item.ai?.people!==undefined);if(!facesDone&&!peopleDone)return;
