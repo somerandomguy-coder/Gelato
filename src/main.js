@@ -77,7 +77,9 @@ function pullFive(anchor) {
   });
   animateMoves(moves); toast(`Pulled ${picks.length} closest images · right-click again for more`);
 }
-canvas.addEventListener('contextmenu', (event) => { const item = hit(event.clientX, event.clientY); if (!item) return; event.preventDefault(); pullFive(item); });
+// Right-click owns one interaction only: pull similar images. It never falls through
+// to the normal click/release handler that opens the full-resolution viewer.
+canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 canvas.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return; const item = hit(event.clientX, event.clientY); if (!item) return;
   event.stopImmediatePropagation(); state.dragged = { item, x:event.clientX, y:event.clientY, ix:item.x, iy:item.y, moved:false }; canvas.setPointerCapture(event.pointerId);
@@ -170,6 +172,7 @@ function refreshSelectionToolbar(){selectionToolbar.style.display=state.selected
 $('#tidy-selected').onclick=tidySelected;$('#reset-layout').onclick=resetLayout;
 const drawWithAxes=draw;
 draw=function drawSelections(){drawWithAxes();if(!state.selected.size&&!state.marquee)return;ctx.save();ctx.strokeStyle='#1d1d1b';ctx.lineWidth=2;for(const item of state.items){if(!state.selected.has(item.id))continue;ctx.strokeRect(state.x+item.x*state.scale-3,state.y+item.y*state.scale-3,item.dw*state.scale+6,item.dh*state.scale+6);}if(state.marquee){const m=state.marquee;ctx.fillStyle='rgba(29,29,27,.08)';ctx.strokeStyle='#1d1d1b';ctx.setLineDash([5,4]);ctx.strokeRect(Math.min(m.x,m.nowX),Math.min(m.y,m.nowY),Math.abs(m.nowX-m.x),Math.abs(m.nowY-m.y));ctx.fillRect(Math.min(m.x,m.nowX),Math.min(m.y,m.nowY),Math.abs(m.nowX-m.x),Math.abs(m.nowY-m.y));ctx.setLineDash([]);}ctx.restore();};
-canvas.addEventListener('pointerdown',(event)=>{if(event.button!==0||hit(event.clientX,event.clientY))return;event.stopImmediatePropagation();state.marquee={x:event.clientX,y:event.clientY,nowX:event.clientX,nowY:event.clientY};canvas.setPointerCapture(event.pointerId);draw();},true);
+canvas.addEventListener('pointerdown',(event)=>{if(event.button!==0||!event.shiftKey||hit(event.clientX,event.clientY))return;event.stopImmediatePropagation();state.marquee={x:event.clientX,y:event.clientY,nowX:event.clientX,nowY:event.clientY};canvas.setPointerCapture(event.pointerId);draw();},true);
 canvas.addEventListener('pointermove',(event)=>{if(!state.marquee)return;event.stopImmediatePropagation();state.marquee.nowX=event.clientX;state.marquee.nowY=event.clientY;const left=Math.min(state.marquee.x,event.clientX),right=Math.max(state.marquee.x,event.clientX),top=Math.min(state.marquee.y,event.clientY),bottom=Math.max(state.marquee.y,event.clientY),rect=canvas.getBoundingClientRect();state.selected=new Set(state.items.filter(item=>{const x=rect.left+state.x+item.x*state.scale,y=rect.top+state.y+item.y*state.scale;return x<right&&x+item.dw*state.scale>left&&y<bottom&&y+item.dh*state.scale>top;}).map(item=>item.id));draw();},true);
 canvas.addEventListener('pointerup',(event)=>{if(!state.marquee)return;event.stopImmediatePropagation();state.marquee=null;refreshSelectionToolbar();},true);
+canvas.addEventListener('pointerdown',(event)=>{if(event.button!==2)return;const item=hit(event.clientX,event.clientY);if(!item)return;event.preventDefault();event.stopImmediatePropagation();pullFive(item);},true);
