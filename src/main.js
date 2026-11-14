@@ -242,9 +242,10 @@ const localPoint=(event)=>{const r=canvas.getBoundingClientRect();return{x:event
 canvas.addEventListener('pointerdown',(event)=>{
   const point=localPoint(event), item=hit(event.clientX,event.clientY);
   if(event.button===2){state.gesture={kind:'pan',button:2,rightDownItem:item,start:point,x:state.x,y:state.y,moved:false};canvas.classList.add('dragging');}
-  else if(event.button===0&&(event.shiftKey||spacePan)&&!item){state.gesture={kind:'pan',start:point,x:state.x,y:state.y,moved:false};canvas.classList.add('dragging');}
+  else if(event.button===0&&spacePan&&!item){state.gesture={kind:'pan',start:point,x:state.x,y:state.y,moved:false};canvas.classList.add('dragging');}
   else if(event.button===0&&!item){state.gesture={kind:'marquee',start:point,now:point};state.marquee={x:point.x,y:point.y,nowX:point.x,nowY:point.y};}
-  else if(event.button===0&&item){const items=state.selected.has(item.id)?state.items.filter(candidate=>state.selected.has(candidate.id)):[item];items.forEach(candidate=>activeMoves.delete(candidate.id));state.gesture={kind:items.length>1?'group':'item',item,items,start:point,positions:items.map(candidate=>({item:candidate,x:candidate.x,y:candidate.y})),x:item.x,y:item.y,moved:false};}
+  else if(event.button===0&&item&&event.shiftKey){state.selected.has(item.id)?state.selected.delete(item.id):state.selected.add(item.id);refreshSelectionToolbar();return;}
+  else if(event.button===0&&item){if(!state.selected.has(item.id)){state.selected=new Set([item.id]);refreshSelectionToolbar();}const items=state.items.filter(candidate=>state.selected.has(candidate.id));items.forEach(candidate=>activeMoves.delete(candidate.id));state.gesture={kind:items.length>1?'group':'item',item,items,start:point,positions:items.map(candidate=>({item:candidate,x:candidate.x,y:candidate.y})),x:item.x,y:item.y,moved:false};}
   else return;
   canvas.setPointerCapture(event.pointerId); draw();
 });
