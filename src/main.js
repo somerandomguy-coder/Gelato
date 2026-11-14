@@ -85,16 +85,20 @@ draw = function enhancedDraw() {
 
 function cosine(a, b) { if(!a||!b||a.length!==b.length||!a.length)return -2;let dot=0,aa=0,bb=0; for(let i=0;i<a.length;i++){dot+=a[i]*b[i];aa+=a[i]*a[i];bb+=b[i]*b[i]} return aa&&bb?dot/Math.sqrt(aa*bb):-2; }
 function vectorFor(item){return state.clipActive&&item.embedding?item.embedding:item.features;}
+function arrangePulled(anchor,items){
+  const stepX=Math.max(anchor.dw,state.size)+gap()*1.5,stepY=Math.max(anchor.dh,state.size)+gap()*1.5,acx=anchor.x+anchor.dw/2,acy=anchor.y+anchor.dh/2;
+  const picked=new Set(items.map(item=>item.id)),blockers=state.items.filter(item=>item!==anchor&&!picked.has(item.id)).map(item=>({x:item.x,y:item.y,w:item.dw,h:item.dh}));
+  const offsets=[];for(let ring=1;ring<=16;ring++){for(let y=-ring+1;y<=ring;y++)offsets.push([ring,y]);for(let x=ring-1;x>=-ring;x--)offsets.push([x,ring]);for(let y=ring-1;y>=-ring;y--)offsets.push([-ring,y]);for(let x=-ring+1;x<=ring;x++)offsets.push([x,-ring]);}
+  offsets.sort((a,b)=>a[0]**2+a[1]**2-(b[0]**2+b[1]**2));
+  const moves=[];for(const item of items){const d=imageSize(item);let place;for(const [gx,gy] of offsets){const x=acx+gx*stepX-d.w/2,y=acy+gy*stepY-d.h/2,box={x,y,w:d.w,h:d.h};if(!blockers.some(b=>box.x<b.x+b.w+gap()&&box.x+box.w+gap()>b.x&&box.y<b.y+b.h+gap()&&box.y+box.h+gap()>b.y)){place={item,x,y,w:d.w,h:d.h};break;}}if(!place)place={item,x:anchor.x+anchor.dw+gap()+moves.length*(d.w+gap()),y:anchor.y,w:d.w,h:d.h};moves.push(place);blockers.push({x:place.x,y:place.y,w:place.w,h:place.h});}
+  return moves;
+}
 function pullFive(anchor) {
   anchor.pulled ||= new Set();
   const picks = state.items.filter(item => item !== anchor && !item.duplicateHidden && !anchor.pulled.has(item.id)).map(item => ({ item, score: cosine(vectorFor(anchor), vectorFor(item)) })).filter(row=>row.score>-1).sort((a,b) => b.score-a.score).slice(0,5);
   if (!picks.length) return toast('No more unseen similar images');
-  const start = anchor.pulled.size, base = Math.max(anchor.dw, anchor.dh, state.size) + gap() + 20;
-  const moves=[];
-  picks.forEach(({item}, index) => {
-    const position = start + index, ring = 1 + Math.floor(position / 8), angle = (position % 8) / 8 * Math.PI * 2 - Math.PI / 2;
-    const d = imageSize(item); moves.push({item,x:anchor.x + anchor.dw/2 + Math.cos(angle) * base * ring - d.w/2,y:anchor.y + anchor.dh/2 + Math.sin(angle) * base * ring - d.h/2,w:d.w,h:d.h}); anchor.pulled.add(item.id);state.revealedIds.add(item.id);
-  });
+  const items=picks.map(({item})=>item),moves=arrangePulled(anchor,items);
+  items.forEach(item=>{anchor.pulled.add(item.id);state.revealedIds.add(item.id);});
   animateMoves(moves); toast(`Pulled ${picks.length} closest images · right-click again for more`);
 }
 // Right-click owns one interaction only: pull similar images. It never falls through
@@ -236,7 +240,8 @@ const resetPageSelection=()=>{state.selected.clear();refreshSelectionToolbar();}
 const localPoint=(event)=>{const r=canvas.getBoundingClientRect();return{x:event.clientX-r.left,y:event.clientY-r.top};};
 canvas.addEventListener('pointerdown',(event)=>{
   const point=localPoint(event), item=hit(event.clientX,event.clientY);
-  if(event.button===2&&!item||event.button===0&&(event.shiftKey||spacePan)&&!item){state.gesture={kind:'pan',start:point,x:state.x,y:state.y,moved:false};canvas.classList.add('dragging');}
+  if(event.button===2){state.gesture={kind:'pan',button:2,rightDownItem:item,start:point,x:state.x,y:state.y,moved:false};canvas.classList.add('dragging');}
+  else if(event.button===0&&(event.shiftKey||spacePan)&&!item){state.gesture={kind:'pan',start:point,x:state.x,y:state.y,moved:false};canvas.classList.add('dragging');}
   else if(event.button===0&&!item){state.gesture={kind:'marquee',start:point,now:point};state.marquee={x:point.x,y:point.y,nowX:point.x,nowY:point.y};}
   else if(event.button===0&&item){const items=state.selected.has(item.id)?state.items.filter(candidate=>state.selected.has(candidate.id)):[item];items.forEach(candidate=>activeMoves.delete(candidate.id));state.gesture={kind:items.length>1?'group':'item',item,items,start:point,positions:items.map(candidate=>({item:candidate,x:candidate.x,y:candidate.y})),x:item.x,y:item.y,moved:false};}
   else return;
@@ -254,12 +259,12 @@ canvas.addEventListener('pointermove',(event)=>{
 });
 canvas.addEventListener('pointerup',(event)=>{
   const gesture=state.gesture;if(!gesture)return;state.gesture=null;canvas.classList.remove('dragging');
-
+  if(gesture.kind==='pan'&&gesture.button===2&&!gesture.moved&&gesture.rightDownItem)pullFive(gesture.rightDownItem);
   if(gesture.kind==='marquee'){state.marquee=null;refreshSelectionToolbar();} draw();
 });
 canvas.addEventListener('pointercancel',()=>{state.gesture=null;state.marquee=null;canvas.classList.remove('dragging');canvas.style.cursor='grab';draw();});
 canvas.addEventListener('pointerleave',()=>{if(!state.gesture&&state.hovered){state.hovered=null;draw();}});
-canvas.addEventListener('contextmenu',(event)=>{event.preventDefault();const item=hit(event.clientX,event.clientY);if(item)pullFive(item);});
+canvas.addEventListener('contextmenu',(event)=>event.preventDefault());
 canvas.addEventListener('dblclick',event=>{const item=hit(event.clientX,event.clientY);if(item)open(item);});
 let spacePan=false;window.addEventListener('keydown',event=>{if(event.code==='Space'&&!event.repeat&&!['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)){spacePan=true;event.preventDefault();}});window.addEventListener('keyup',event=>{if(event.code==='Space')spacePan=false;});window.addEventListener('blur',()=>{spacePan=false;});
 const drawWithPointerFeedback=draw;draw=function pointerFeedbackDraw(){drawWithPointerFeedback();if(!state.hovered||!visibleItems().includes(state.hovered))return;const item=state.hovered;ctx.save();ctx.strokeStyle='#e16d45';ctx.lineWidth=2;ctx.strokeRect(state.x+item.x*state.scale-3,state.y+item.y*state.scale-3,item.dw*state.scale+6,item.dh*state.scale+6);ctx.restore();};
