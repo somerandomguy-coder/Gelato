@@ -66,7 +66,8 @@ draw = function enhancedDraw() {
 function cosine(a, b) { let dot=0,aa=0,bb=0; for(let i=0;i<a.length;i++){dot+=a[i]*b[i];aa+=a[i]*a[i];bb+=b[i]*b[i]} return dot/Math.sqrt(aa*bb || 1); }
 function pullFive(anchor) {
   anchor.pulled ||= new Set();
-  const picks = state.items.filter(item => item !== anchor && !anchor.pulled.has(item.id)).map(item => ({ item, score: cosine(anchor.features, item.features) })).sort((a,b) => b.score-a.score).slice(0,5);
+  const activeVector = (item) => item.embedding || item.features;
+  const picks = state.items.filter(item => item !== anchor && !anchor.pulled.has(item.id)).map(item => ({ item, score: cosine(activeVector(anchor), activeVector(item)) })).sort((a,b) => b.score-a.score).slice(0,5);
   if (!picks.length) return toast('No more unseen similar images');
   const start = anchor.pulled.size, base = Math.max(anchor.dw, anchor.dh, state.size) + gap() + 20;
   picks.forEach(({item}, index) => {
@@ -85,3 +86,69 @@ canvas.addEventListener('pointermove', (event) => {
   if (Math.hypot(dx,dy)>3/state.scale) drag.moved=true; drag.item.x=drag.ix+dx; drag.item.y=drag.iy+dy; drag.item.manual=true; draw();
 }, true);
 canvas.addEventListener('pointerup', (event) => { const drag=state.dragged; if(!drag)return; event.stopImmediatePropagation(); state.dragged=null; if(!drag.moved)open(drag.item); }, true);
+
+// AI Lab — deliberately lazy. These URLs are not contacted until one of the three
+// buttons below is pressed by the person using the wall.
+const AI = { mp:null, vision:null, face:null, people:null, clip:null };
+const aiStatus = (text) => { $('#ai-status').textContent = text; };
+async function visionRuntime() {
+  if (!AI.mp) AI.mp = await import(/* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs');
+  if (!AI.vision) AI.vision = await AI.mp.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm');
+  return AI;
+}
+async function modelBytes(url) { const response = await fetch(url); if (!response.ok) throw new Error(`model download failed (${response.status})`); return new Uint8Array(await response.arrayBuffer()); }
+async function scanWith(kind) {
+  if (!state.items.length) return toast('Upload images before running a scan');
+  const button = kind === 'face' ? $('#btn-faces') : $('#btn-people'); button.disabled = true;
+  try {
+    aiStatus('Loading local browser vision runtime…'); const lab = await visionRuntime();
+    let detector;
+    if (kind === 'face') {
+      if (!lab.face) { aiStatus('Downloading BlazeFace (~230 KB)…'); lab.face = await lab.mp.FaceDetector.createFromOptions(lab.vision, { baseOptions:{modelAssetBuffer:await modelBytes('https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite')}, runningMode:'IMAGE', minDetectionConfidence:.45 }); }
+      detector = lab.face;
+    } else {
+      if (!lab.people) { aiStatus('Downloading people detector (~4.6 MB)…'); lab.people = await lab.mp.ObjectDetector.createFromOptions(lab.vision, { baseOptions:{modelAssetBuffer:await modelBytes('https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite')}, runningMode:'IMAGE', scoreThreshold:.38, categoryAllowlist:['person'] }); }
+      detector = lab.people;
+    }
+    let found = 0;
+    for (let index=0; index<state.items.length; index++) {
+      const item=state.items[index], size=640, scale=Math.min(1,size/Math.max(item.w,item.h));
+      const work=document.createElement('canvas'); work.width=Math.max(16,Math.round(item.w*scale)); work.height=Math.max(16,Math.round(item.h*scale)); work.getContext('2d').drawImage(item.thumb,0,0,work.width,work.height);
+      const results=detector.detect(work).detections || []; item.ai ||= {}; item.ai[kind]=results.length; found+=results.length;
+      if (index%3===0) { aiStatus(`Scanning ${kind === 'face' ? 'faces' : 'people'} · ${index+1}/${state.items.length}`); await new Promise(requestAnimationFrame); }
+    }
+    aiStatus(`${kind === 'face' ? 'Faces' : 'People'} complete · ${found} found`); toast(`${found} ${kind === 'face' ? 'faces' : 'people'} found locally`);
+  } catch (error) { aiStatus(`Scan failed: ${error.message}`); toast('AI scan could not start — check connection'); }
+  finally { button.disabled=false; }
+}
+async function runClip() {
+  if (!state.items.length) return toast('Upload images before running CLIP');
+  const button=$('#btn-clip'); button.disabled=true;
+  try {
+    aiStatus('Loading CLIP runtime and model (~85 MB)…');
+    if (!AI.clip) {
+      const transformers=await import(/* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3/dist/transformers.min.js');
+      const [processor,visionModel,RawImage]=await Promise.all([transformers.AutoProcessor.from_pretrained('Xenova/clip-vit-base-patch32'),transformers.CLIPVisionModelWithProjection.from_pretrained('Xenova/clip-vit-base-patch32'),transformers.RawImage]);
+      AI.clip={processor,visionModel,RawImage};
+    }
+    for(let index=0;index<state.items.length;index++) { const item=state.items[index], raw=await AI.clip.RawImage.fromBlob(item.file), input=await AI.clip.processor(raw), output=await AI.clip.visionModel(input), embedding=Float32Array.from(output.image_embeds.data); const norm=Math.hypot(...embedding)||1; item.embedding=Array.from(embedding,x=>x/norm); if(index%2===0){aiStatus(`Understanding images · ${index+1}/${state.items.length}`);await new Promise(requestAnimationFrame);} }
+    // The existing visual-map/UMAP neighbour path reads `features`; once CLIP is
+    // ready it can safely use the normalized 512-d semantic representation instead.
+    state.items.forEach(item => { if (item.embedding) item.features = item.embedding; });
+    relayout({fitView:true});
+    aiStatus('CLIP ready · similarity and maps now use image meaning'); toast('CLIP embeddings applied to maps and similarity');
+  } catch (error) { aiStatus(`CLIP failed: ${error.message}`); toast('CLIP could not load — check connection'); }
+  finally { button.disabled=false; }
+}
+$('#btn-faces').onclick=()=>scanWith('face'); $('#btn-people').onclick=()=>scanWith('people'); $('#btn-clip').onclick=runClip;
+
+// Replaces the quick colour PCA after CLIP is available. This is the same
+// power-iteration approach used by the reference workbench, over every vector dimension.
+pcaPoints = function fullVectorPca() {
+  const vectors=state.items.map(item=>item.embedding || item.features), n=vectors.length, d=vectors[0]?.length || 0;
+  if(n<2 || !d) return vectors.map(()=>[.5,.5]);
+  const mean=Array(d).fill(0); for(const v of vectors) for(let k=0;k<d;k++) mean[k]+=v[k]/n;
+  const rows=vectors.map(v=>v.map((value,k)=>value-mean[k]));
+  const axis=(orthogonal)=>{ let v=Array.from({length:d},(_,k)=>Math.sin(k*1.732+(orthogonal?.[k]||0))); for(let round=0;round<38;round++){const next=Array(d).fill(0);for(const row of rows){let dot=0;for(let k=0;k<d;k++)dot+=row[k]*v[k];for(let k=0;k<d;k++)next[k]+=row[k]*dot;}if(orthogonal){let dot=0;for(let k=0;k<d;k++)dot+=next[k]*orthogonal[k];for(let k=0;k<d;k++)next[k]-=dot*orthogonal[k];}const norm=Math.hypot(...next)||1;v=next.map(value=>value/norm);}return v; };
+  const first=axis(),second=axis(first); return normalize(rows.map(row=>{let x=0,y=0;for(let k=0;k<d;k++){x+=row[k]*first[k];y+=row[k]*second[k];}return[x,y];}));
+};
