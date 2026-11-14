@@ -1,8 +1,15 @@
+import { computePCA, computeUMAP } from './projections.js';
+import { packLayout } from './viz-packer.js';
+
 const $ = (s) => document.querySelector(s);
 const canvas = $('#wall'), ctx = canvas.getContext('2d');
-const state = { items: [], layout: 'pack', size: 170, captions: false, tight: true, scale: 1, x: 0, y: 0, pointer: null, fullUrl: null, dragged: null, selected: new Set(), marquee: null, faceFilter:'all', peopleFilter:'all' };
+const state = { items: [], layout: 'pack', size: 170, captions: false, tight: true, scale: 1, x: 0, y: 0, pointer: null, fullUrl: null, dragged: null, selected: new Set(), marquee: null, faceFilter:'all', peopleFilter:'all', page:1, pageSize:500 };
 const labels = { pack: 'Tight board', grid: 'Browse', pca: 'Visual map · PCA', umap: 'Style neighbourhoods · UMAP', color: 'Colour mood · colour grade' };
 const toast = (message) => { const el = $('#toast'); el.textContent = message; el.classList.add('show'); clearTimeout(toast.timer); toast.timer = setTimeout(() => el.classList.remove('show'), 2200); };
+const workerPending=new Map(); let workerSerial=0;
+const imageWorker=typeof Worker!=='undefined'&&typeof OffscreenCanvas!=='undefined'?new Worker(new URL('./image-worker.js',import.meta.url),{type:'module'}):null;
+if(imageWorker)imageWorker.onmessage=({data})=>{const pending=workerPending.get(data.id);if(!pending)return;workerPending.delete(data.id);data.type==='error'?pending.reject(new Error(data.error)):pending.resolve(data);};
+function workerJob(type,payload){if(!imageWorker)return Promise.reject(new Error('Worker unavailable'));const id=++workerSerial;return new Promise((resolve,reject)=>{workerPending.set(id,{resolve,reject});imageWorker.postMessage({type,id,...payload});});}
 
 function resize() { const rect = canvas.getBoundingClientRect(), dpr = devicePixelRatio || 1; canvas.width = rect.width * dpr; canvas.height = rect.height * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); draw(); }
 if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas); else window.addEventListener('resize', resize);
@@ -10,7 +17,7 @@ function gap() { return state.tight ? 6 : 26; }
 function imageSize(item) { const h = state.size, ratio = item.w / item.h; return ratio >= 1 ? { w:h, h:Math.max(55,h/ratio) } : { w:Math.max(55,h*ratio), h }; }
 function bounds() { if (!state.items.length) return { minX:0,minY:0,maxX:1,maxY:1 }; return state.items.reduce((b,i) => ({ minX:Math.min(b.minX,i.x),minY:Math.min(b.minY,i.y),maxX:Math.max(b.maxX,i.x+i.dw),maxY:Math.max(b.maxY,i.y+i.dh+(state.captions?20:0)) }), {minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity}); }
 function fit() { if (!state.items.length) return; const b=bounds(), rect=canvas.getBoundingClientRect(); state.scale=Math.max(.08,Math.min(1.4,(rect.width-90)/(b.maxX-b.minX),(rect.height-90)/(b.maxY-b.minY))); state.x=(rect.width-(b.maxX-b.minX)*state.scale)/2-b.minX*state.scale; state.y=(rect.height-(b.maxY-b.minY)*state.scale)/2-b.minY*state.scale; draw(); }
-function pack() { const g=gap(), maxWidth=2200; let x=0,y=0,row=0; state.items.forEach((item) => { const d=imageSize(item); if(x&&x+d.w>maxWidth){x=0;y+=row+g;row=0} Object.assign(item,{x,y,dw:d.w,dh:d.h});x+=d.w+g;row=Math.max(row,d.h+(state.captions?20:0)) }); }
+function pack() { const packed=packLayout(state.items,state.size,gap()); packed.items.forEach(placement=>Object.assign(placement.item,{x:placement.x,y:placement.y,dw:placement.w,dh:placement.h})); }
 function grid() { const g=gap(), cell=state.size, columns=8; state.items.forEach((item,index)=>{const d=imageSize(item), col=index%columns,row=Math.floor(index/columns);Object.assign(item,{x:col*(cell+g),y:row*(cell+g+(state.captions?20:0)),dw:d.w,dh:d.h})}); }
 function normalize(points) { const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);return points.map(([x,y])=>[(x-minX)/(maxX-minX||1),(y-minY)/(maxY-minY||1)]); }
 function pcaPoints() { const vectors=state.items.map(i=>i.features), n=vectors.length,d=5; if(n<2)return vectors.map(()=>[.5,.5]);const mean=Array(d).fill(0);vectors.forEach(v=>v.forEach((x,j)=>mean[j]+=x/n));const centered=vectors.map(v=>v.map((x,j)=>x-mean[j]));const axis=(orth)=>{let a=Array.from({length:d},(_,i)=>Math.sin(i*2.17+(orth?1:0)));for(let it=0;it<28;it++){let next=Array(d).fill(0);centered.forEach(v=>{const dot=v.reduce((s,x,j)=>s+x*a[j],0);v.forEach((x,j)=>next[j]+=x*dot)});if(orth){const dot=next.reduce((s,x,j)=>s+x*orth[j],0);next=next.map((x,j)=>x-dot*orth[j])}const norm=Math.hypot(...next)||1;a=next.map(x=>x/norm)}return a};const a=axis(),b=axis(a);return normalize(centered.map(v=>[v.reduce((s,x,j)=>s+x*a[j],0),v.reduce((s,x,j)=>s+x*b[j],0)])); }
@@ -19,7 +26,13 @@ function colour() { const span=1800;state.items.forEach(item=>{const d=imageSize
 function relayout({fitView=false}={}) { if(state.layout==='pack')pack();else if(state.layout==='grid')grid();else if(state.layout==='color')colour();else scatter(state.layout); state.items.forEach(item=>{item.baseX=item.x;item.baseY=item.y;item.baseW=item.dw;item.baseH=item.dh}); if(fitView)requestAnimationFrame(fit);draw(); }
 function draw() { const r=canvas.getBoundingClientRect(); ctx.clearRect(0,0,r.width,r.height);ctx.fillStyle='#f5f5f2';ctx.fillRect(0,0,r.width,r.height);ctx.save();ctx.translate(state.x,state.y);ctx.scale(state.scale,state.scale);if(state.layout==='color'){const g=ctx.createLinearGradient(0,0,1800,0);['#e88b75','#e7cc71','#8daf7c','#77a4b5','#9d84b7','#dc7791','#e88b75'].forEach((c,i)=>g.addColorStop(i/6,c));ctx.globalAlpha=.12;ctx.fillStyle=g;ctx.fillRect(-150,-150,2200,2100);ctx.globalAlpha=1}for(const item of state.items){const x=item.x,y=item.y,w=item.dw,h=item.dh;if(x+w<(-state.x/state.scale)||y+h<(-state.y/state.scale)||x>(r.width-state.x)/state.scale||y>(r.height-state.y)/state.scale)continue;ctx.drawImage(item.thumb,x,y,w,h);ctx.strokeStyle='rgba(0,0,0,.11)';ctx.lineWidth=1/state.scale;ctx.strokeRect(x,y,w,h);if(state.captions){ctx.fillStyle='#4b4a45';ctx.font=`${11/state.scale}px "DM Sans"`;ctx.fillText(item.name.slice(0,26),x,y+h+14/state.scale)}}ctx.restore();$('#zoom-label').textContent=`${Math.round(state.scale*100)}%`;$('#image-count').textContent=state.items.length;$('#empty').hidden=state.items.length>0; }
 function metricFromCanvas(c) { const x=c.getContext('2d'), data=x.getImageData(0,0,c.width,c.height).data;let r=0,g=0,b=0;for(let i=0;i<data.length;i+=4){r+=data[i];g+=data[i+1];b+=data[i+2]}const n=data.length/4;r/=n;g/=n;b/=n;const max=Math.max(r,g,b),min=Math.min(r,g,b),l=(max+min)/510,delta=max-min;let hue=0;if(delta){if(max===r)hue=((g-b)/delta+6)%6;else if(max===g)hue=(b-r)/delta+2;else hue=(r-g)/delta+4;hue/=6}return {features:[r/255,g/255,b/255,l,delta/255],hue,luma:l}; }
-async function thumbFor(file) { const url=URL.createObjectURL(file), image=new Image();image.src=url;await image.decode();const scale=Math.min(1,320/Math.max(image.naturalWidth,image.naturalHeight));const c=document.createElement('canvas');c.width=Math.max(1,Math.round(image.naturalWidth*scale));c.height=Math.max(1,Math.round(image.naturalHeight*scale));c.getContext('2d').drawImage(image,0,0,c.width,c.height);URL.revokeObjectURL(url);const thumb=window.createImageBitmap?await createImageBitmap(c):c;return {thumb,w:c.width,h:c.height,...metricFromCanvas(c)}; }
+async function thumbFor(file) { const url=URL.createObjectURL(file), image=new Image();image.src=url;await image.decode();const origW=image.naturalWidth,origH=image.naturalHeight,scale=Math.min(1,320/Math.max(origW,origH));const c=document.createElement('canvas');c.width=Math.max(1,Math.round(origW*scale));c.height=Math.max(1,Math.round(origH*scale));c.getContext('2d').drawImage(image,0,0,c.width,c.height);URL.revokeObjectURL(url);const thumb=window.createImageBitmap?await createImageBitmap(c):c;return {thumb,w:c.width,h:c.height,width:origW,height:origH,...metricFromCanvas(c)}; }
+const mainThreadThumb=thumbFor;
+thumbFor=async function workerThumbnail(file){
+  if(!imageWorker)return mainThreadThumb(file);
+  const {thumb,width,height,tw,th,analysis}=await workerJob('thumbnail',{file});
+  return {thumb,w:tw,h:th,width,height,features:Array.from(analysis.vector),hue:analysis.primaryHsl.h/360,luma:analysis.primaryHsl.l,analysis};
+};
 async function loadFiles(files,label='images') {
   const valid=[...files].filter(f=>f.type.startsWith('image/'));
   if(!valid.length)return toast('No supported image files found');
@@ -145,7 +158,7 @@ async function runClip() {
     // The existing visual-map/UMAP neighbour path reads `features`; once CLIP is
     // ready it can safely use the normalized 512-d semantic representation instead.
     state.items.forEach(item => { if (item.embedding) item.features = item.embedding; });
-    relayout({fitView:true});
+    projectionCount=0; relayout({fitView:true});
     aiStatus('CLIP ready · similarity and maps now use image meaning'); toast('CLIP embeddings applied to maps and similarity');
   } catch (error) { aiStatus(`CLIP failed: ${error.message}`); toast('CLIP could not load — check connection'); }
   finally { button.disabled=false; }
@@ -175,9 +188,10 @@ function tidySelected() {
   selected.forEach(item=>{const d=imageSize(item);if(x>minX&&x+d.w>minX+max){x=minX;y+=row+gap();row=0}moves.push({item,x,y,w:d.w,h:d.h});x+=d.w+gap();row=Math.max(row,d.h);});animateMoves(moves);toast(`Tidied ${selected.length} selected images`);
 }
 function resetLayout() { const moves=state.items.map(item=>({item,x:item.baseX??item.x,y:item.baseY??item.y,w:item.baseW??item.dw,h:item.baseH??item.dh}));animateMoves(moves,460);state.selected.clear();refreshSelectionToolbar();toast('Returned every image to its layout position'); }
-const selectionToolbar=document.createElement('div');selectionToolbar.style.cssText='position:absolute;left:50%;bottom:42px;transform:translateX(-50%);display:none;gap:6px;align-items:center;background:#1d1d1b;color:#fff;padding:6px;border-radius:7px;box-shadow:0 8px 22px #0003;z-index:4';selectionToolbar.innerHTML='<span id="selection-count" style="font-size:11px;padding:0 5px"></span><button id="tidy-selected" class="button">Tidy selection</button><button id="reset-layout" class="button">Reset layout</button>';document.querySelector('.workspace').append(selectionToolbar);
+const selectionToolbar=document.createElement('div');selectionToolbar.style.cssText='position:absolute;left:50%;bottom:42px;transform:translateX(-50%);display:none;gap:6px;align-items:center;background:#1d1d1b;color:#fff;padding:6px;border-radius:7px;box-shadow:0 8px 22px #0003;z-index:4';selectionToolbar.innerHTML='<span id="selection-count" style="font-size:11px;padding:0 5px"></span><button id="tidy-selected" class="button">Tidy selection</button><button id="name-selected" class="button">Name people</button><button id="reset-layout" class="button">Reset layout</button>';document.querySelector('.workspace').append(selectionToolbar);
 function refreshSelectionToolbar(){selectionToolbar.style.display=state.selected.size?'flex':'none';$('#selection-count').textContent=`${state.selected.size} selected`;draw();}
 $('#tidy-selected').onclick=tidySelected;$('#reset-layout').onclick=resetLayout;
+$('#name-selected').onclick=()=>{const name=prompt('Who is in these selected photos? (This is a local label.)');if(!name?.trim())return;state.items.filter(item=>state.selected.has(item.id)).forEach(item=>{item.peopleName=name.trim();});toast(`Named ${state.selected.size} photos “${name.trim()}”`);draw();};
 const drawWithAxes=draw;
 draw=function drawSelections(){drawWithAxes();if(!state.selected.size&&!state.marquee)return;ctx.save();ctx.strokeStyle='#1d1d1b';ctx.lineWidth=2;for(const item of state.items){if(!state.selected.has(item.id))continue;ctx.strokeRect(state.x+item.x*state.scale-3,state.y+item.y*state.scale-3,item.dw*state.scale+6,item.dh*state.scale+6);}if(state.marquee){const m=state.marquee;ctx.fillStyle='rgba(29,29,27,.08)';ctx.strokeStyle='#1d1d1b';ctx.setLineDash([5,4]);ctx.strokeRect(Math.min(m.x,m.nowX),Math.min(m.y,m.nowY),Math.abs(m.nowX-m.x),Math.abs(m.nowY-m.y));ctx.fillRect(Math.min(m.x,m.nowX),Math.min(m.y,m.nowY),Math.abs(m.nowX-m.x),Math.abs(m.nowY-m.y));ctx.setLineDash([]);}ctx.restore();};
 canvas.addEventListener('pointerdown',(event)=>{if(event.button!==0||!event.shiftKey||hit(event.clientX,event.clientY))return;event.stopImmediatePropagation();state.marquee={x:event.clientX,y:event.clientY,nowX:event.clientX,nowY:event.clientY};canvas.setPointerCapture(event.pointerId);draw();},true);
@@ -194,13 +208,31 @@ const drawBeforeAiFilters=draw;
 draw=function drawWithAiFilters(){
   // Keep spatial coordinates intact: filters hide matching thumbnails rather than
   // recomputing the layout and losing the user's carefully arranged board.
-  const all=state.items; state.items=all.filter(matchesAiFilter); drawBeforeAiFilters(); state.items=all;
+  const all=state.items, filtered=all.filter(matchesAiFilter), start=(state.page-1)*state.pageSize;
+  state.items=filtered.slice(start,start+state.pageSize); drawBeforeAiFilters(); state.items=all;
   const rect=canvas.getBoundingClientRect();ctx.save();ctx.font='10px "DM Mono"';
-  for(const item of all){if(!matchesAiFilter(item)||(!item.ai?.face&&!item.ai?.people))continue;const x=state.x+(item.x+4)*state.scale,y=state.y+(item.y+4)*state.scale;let label='';if(item.ai?.face)label+=`◉ ${item.ai.face}`;if(item.ai?.people)label+=`${label?'  ':''}♙ ${item.ai.people}`;ctx.fillStyle='rgba(24,24,22,.82)';const width=ctx.measureText(label).width+10;ctx.fillRect(x,y,width,17);ctx.fillStyle='#fff';ctx.fillText(label,x+5,y+12);}
+  for(const item of all){if(!matchesAiFilter(item)||(!item.ai?.face&&!item.ai?.people)&&!item.peopleName)continue;const x=state.x+(item.x+4)*state.scale,y=state.y+(item.y+4)*state.scale;let label=item.peopleName?`◉ ${item.peopleName}`:'';if(item.ai?.face)label+=`${label?'  ':''}◉ ${item.ai.face}`;if(item.ai?.people)label+=`${label?'  ':''}♙ ${item.ai.people}`;ctx.fillStyle='rgba(24,24,22,.82)';const width=ctx.measureText(label).width+10;ctx.fillRect(x,y,width,17);ctx.fillStyle='#fff';ctx.fillText(label,x+5,y+12);}
   ctx.restore();
 };
 const rawHit=hit;
 hit=function filteredHit(clientX,clientY){const item=rawHit(clientX,clientY);return item&&matchesAiFilter(item)?item:undefined;};
+let projectionRun=0, projectionCount=0;
+function requestReferenceProjections(){
+  const vectors=state.items.map(item=>item.embedding||item.features);if(vectors.length<2||projectionCount===vectors.length)return;projectionCount=vectors.length;const run=++projectionRun;
+  workerJob('projections',{vectors}).then(({pca,umap})=>{if(run!==projectionRun)return;state.items.forEach((item,index)=>{item.referencePca=pca.coords[index]||[0,0];item.referenceUmap=umap.coords[index]||[0,0];});if(['pca','umap'].includes(state.layout))relayout({fitView:true});}).catch(()=>{});
+}
+// Uses the reference project's deterministic PCA + PCA-initialized UMAP, computed
+// in the worker so a large image folder never freezes pointer/zoom interaction.
+scatter=function referenceScatter(mode){
+  requestReferenceProjections();const key=mode==='umap'?'referenceUmap':'referencePca',span=1600;
+  state.items.forEach((item,index)=>{const coords=item[key]||[Math.cos(index)*.08,Math.sin(index)*.08],d=imageSize(item);Object.assign(item,{x:(coords[0]+1)*.5*span,y:(1-(coords[1]+1)*.5)*span,dw:d.w,dh:d.h});});
+};
+
+const pageBar=document.createElement('div');pageBar.style.cssText='display:none;gap:5px;align-items:center;margin-right:auto;font:10px "DM Mono"';pageBar.innerHTML='<button class="button" id="page-prev" style="padding:4px 7px">‹</button><span id="page-label"></span><button class="button" id="page-next" style="padding:4px 7px">›</button><select id="page-size" style="font:10px DM Mono;border:1px solid #d5d5ce;border-radius:4px;padding:4px"><option value="250">250 / page</option><option value="500" selected>500 / page</option><option value="1000">1000 / page</option><option value="999999">All</option></select>';document.querySelector('.rail-bottom').prepend(pageBar);
+function updatePageUi(){const filtered=state.items.filter(matchesAiFilter),pages=Math.max(1,Math.ceil(filtered.length/state.pageSize));state.page=Math.min(state.page,pages);pageBar.style.display=filtered.length>state.pageSize?'flex':'none';$('#page-label').textContent=`${state.page}/${pages}`;}
+const drawWithPages=draw;draw=function pagedDraw(){updatePageUi();drawWithPages();};
+function fitPage(){const filtered=state.items.filter(matchesAiFilter).slice((state.page-1)*state.pageSize,state.page*state.pageSize);if(!filtered.length)return;const b=filtered.reduce((box,item)=>({minX:Math.min(box.minX,item.x),minY:Math.min(box.minY,item.y),maxX:Math.max(box.maxX,item.x+item.dw),maxY:Math.max(box.maxY,item.y+item.dh)}),{minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity}),r=canvas.getBoundingClientRect();state.scale=Math.max(.08,Math.min(1.4,(r.width-90)/(b.maxX-b.minX),(r.height-90)/(b.maxY-b.minY)));state.x=(r.width-(b.maxX-b.minX)*state.scale)/2-b.minX*state.scale;state.y=(r.height-(b.maxY-b.minY)*state.scale)/2-b.minY*state.scale;draw();}
+$('#page-prev').onclick=()=>{state.page=Math.max(1,state.page-1);fitPage();};$('#page-next').onclick=()=>{const total=Math.ceil(state.items.filter(matchesAiFilter).length/state.pageSize);state.page=Math.min(total,state.page+1);fitPage();};$('#page-size').onchange=e=>{state.pageSize=+e.target.value;state.page=1;fitPage();};
 const filterControls=document.createElement('div');filterControls.style.cssText='display:none;margin-top:8px;gap:5px;flex-wrap:wrap';filterControls.id='ai-filters';document.querySelector('#ai-status').after(filterControls);
 function renderAiFilters(){
   const facesDone=state.items.some(item=>item.ai?.face!==undefined),peopleDone=state.items.some(item=>item.ai?.people!==undefined);if(!facesDone&&!peopleDone)return;
