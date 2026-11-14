@@ -1,28 +1,22 @@
 # Gelato
 
-An infinite-canvas brand direction board for personal brand strategists, photographers, designers, and independent creatives.
+A fast, local-first image wall for seeing a whole folder of references at once.
 
-Build a visual territory by dropping in references or uploading a whole image folder, adding notes, arranging a story, and exporting a shareable project snapshot. Folder uploads automatically open in a bird's-eye grid. Everything stays in the browser; image files are never uploaded.
+Upload a folder, get a bird's-eye view, pan and zoom around it, then click any image when you need its original file at full resolution. Gelato renders only small 320px thumbnail bitmaps on the canvas; the original image is opened only on demand.
 
-## Run locally
+## Run
 
 ```bash
 npm install
 npm run dev
 ```
 
-This is a self-contained Vite site with no backend or external data dependency. The main build surface is `src/main.js`; image assets are user-supplied at runtime.
+## Views
 
-## Canvas controls
+- **Tight board** — compact packed wall with no gaps by default.
+- **Browse** — simple grid for scanning.
+- **Visual map** — PCA projection of thumbnail colour, brightness and saturation.
+- **Style neighbourhoods** — a lightweight UMAP-style nearest-neighbour layout.
+- **Colour mood** — hue × brightness colour-grade field.
 
-- Upload Folder opens every supported image in a folder, then fits the canvas to show the entire collection.
-- Drag items to compose.
-- Drag empty canvas or hold Space to pan.
-- Scroll to zoom toward the cursor.
-- Click to select; Shift-click to extend selection.
-- Drag from empty space to marquee-select.
-- Double click an image to inspect it.
-
-## Intent
-
-The first version is a flexible base rather than a tool locked to one job: a strategist can map brand worlds, a photographer can construct a treatment, and a designer can collect visual directions. The project brief and territory vocabulary can be changed freely.
+Use the display controls to show filenames only when you need them, turn off tight spacing, change thumbnail size, or fit the entire collection back into view.
