@@ -59,6 +59,7 @@ input[type=range] { width: 100%; accent-color: var(--ink); }
 .empty .link { display: block; margin: 9px auto; }
 .no-matches { position: absolute; z-index: 1; left: 50%; top: 47%; transform: translate(-50%,-50%); display: grid; justify-items: center; gap: 8px; width: min(360px,90%); padding: 18px; text-align: center; background: rgba(255,255,255,.94); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 8px 24px #0000000d; }
 .no-matches span { color: var(--muted); font-size: 11px; }
+.no-matches[hidden] { display: none; }
 .hint { position: absolute; z-index: 2; bottom: 14px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,.9); border: 1px solid var(--line); border-radius: 15px; padding: 5px 10px; color: var(--muted); font-size: 10px; pointer-events: none; white-space: nowrap; }
 .active-draft-banner { position: absolute; z-index: 3; top: 42px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; background: #1d1d1b; color: #fff; padding: 6px 8px 6px 12px; border-radius: 8px; box-shadow: 0 5px 20px #0003; font-size: 11px; white-space: nowrap; }
 .active-draft-banner[hidden] { display: none; }
