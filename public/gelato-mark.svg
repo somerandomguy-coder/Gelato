@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Gelato mark">
+  <path fill="#E16D45" d="M32 6c11 0 20 8.6 20 19.3 0 4.9-1.9 8.8-5.2 12.1L39.3 57H24.7l-7.5-19.6C13.9 34.1 12 30.2 12 25.3 12 14.6 21 6 32 6Z"/>
+  <path fill="#FFF7EB" d="M32 13c6.8 0 12.3 5.2 12.3 11.7 0 4.1-2.3 7.6-5.8 9.6L32 49l-6.5-14.7c-3.5-2-5.8-5.5-5.8-9.6C19.7 18.2 25.2 13 32 13Z"/>
+  <circle cx="26" cy="24" r="2.3" fill="#24221F"/><circle cx="38" cy="24" r="2.3" fill="#24221F"/>
+  <path d="M25.5 29.6c3.8 3.1 9.2 3.1 13 0" fill="none" stroke="#24221F" stroke-linecap="round" stroke-width="2.5"/>
+</svg>

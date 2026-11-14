@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f1ea" />
+    <title>Gelato — Visual direction, in one place</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="wordmark" href="#" aria-label="Gelato home"><img src="/gelato-mark.svg" alt="" width="22" height="22" style="vertical-align: middle; margin-right: 6px" />Gelato</a>
+      <div class="project-name"><span class="status-dot"></span><input id="project-title" value="A new point of view" aria-label="Project title" /></div>
+      <div class="top-actions">
+        <button id="btn-help" class="icon-button" title="Canvas controls">?</button>
+        <button id="btn-export" class="button subtle">Export board</button>
+        <button id="btn-add-images" class="button dark">+ Add references</button>
+        <input id="image-input" type="file" accept="image/*" multiple hidden />
+      </div>
+    </header>
+
+    <main>
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-head">
+          <p class="eyebrow">BRAND DIRECTION</p>
+          <button class="collapse" id="btn-collapse" title="Collapse sidebar">‹</button>
+        </div>
+
+        <section class="brief-card">
+          <div class="section-title"><span>THE BRIEF</span><button id="btn-edit-brief" class="text-button">Edit</button></div>
+          <h1 id="brief-title">The person behind the practice</h1>
+          <p id="brief-copy">A considered personal brand for someone whose work makes complexity feel human, useful and quietly distinctive.</p>
+          <div class="pills" id="brief-pills"><span>Warm authority</span><span>Editorial</span><span>In motion</span></div>
+        </section>
+
+        <section class="rail-section">
+          <div class="section-title"><span>TERRITORIES</span><button id="btn-add-territory" class="text-button">+ Add</button></div>
+          <div class="territory-list" id="territory-list"></div>
+        </section>
+
+        <section class="rail-section stretch">
+          <div class="section-title"><span>NOTES</span><span id="note-count" class="mono">0</span></div>
+          <div id="notes-list" class="notes-list"></div>
+          <button id="btn-add-note" class="add-note">+ Add a thinking note</button>
+        </section>
+
+        <section class="rail-footer">
+          <div><span class="mono" id="item-count">0 ITEMS</span><span class="divider">·</span><span class="mono" id="zoom-display">100%</span></div>
+          <button id="btn-clear" class="text-button danger">Clear board</button>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <div class="canvas-toolbar">
+          <div class="view-tabs" role="tablist"><button class="view-tab active" data-view="board">Board</button><button class="view-tab" data-view="focus">Focus</button></div>
+          <div class="canvas-status"><span class="legend-dot terr-a"></span><span id="active-territory-label">All territories</span></div>
+          <div class="zoom-tools"><button id="btn-zoom-out" aria-label="Zoom out">−</button><button id="btn-fit">Fit</button><button id="btn-zoom-in" aria-label="Zoom in">+</button></div>
+        </div>
+        <div id="canvas-stage" class="canvas-stage" tabindex="0" aria-label="Gelato infinite canvas">
+          <div class="canvas-grid"></div>
+          <div id="empty-state" class="empty-state">
+            <div class="empty-star">✦</div>
+            <h2>Give the idea somewhere to land.</h2>
+            <p>Drop in visual references, then pull them into a point of view.</p>
+            <button id="btn-empty-add" class="button dark">Add your first references</button>
+            <small>or start with the example direction below</small>
+            <button id="btn-load-demo" class="text-button">Load example board →</button>
+          </div>
+          <div id="canvas-items" class="canvas-items"></div>
+          <div id="marquee" class="marquee" hidden></div>
+          <div id="canvas-hint" class="canvas-hint">Scroll to zoom · Drag empty space to pan · Shift-click to select</div>
+        </div>
+        <div id="selection-toolbar" class="selection-toolbar" hidden>
+          <span id="selection-count">1 selected</span><span class="tool-divider"></span>
+          <button id="btn-tag-selection">Move to territory</button>
+          <button id="btn-bring-front">Bring forward</button>
+          <button id="btn-delete-selection" class="danger">Remove</button>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="brief-dialog" class="dialog">
+      <form method="dialog" id="brief-form">
+        <div class="dialog-top"><p class="eyebrow">SHAPE THE BRIEF</p><button class="close" value="cancel">×</button></div>
+        <label>Direction name<input id="brief-input-title" required /></label>
+        <label>The feeling or challenge<textarea id="brief-input-copy" rows="4" required></textarea></label>
+        <label>Keywords <small>separate with commas</small><input id="brief-input-tags" /></label>
+        <div class="dialog-actions"><button value="cancel" class="button subtle">Cancel</button><button id="btn-save-brief" value="default" class="button dark">Save direction</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="lightbox" class="lightbox"><button id="btn-close-lightbox" class="close lightbox-close">×</button><img id="lightbox-image" alt="Selected reference" /><div id="lightbox-caption"></div></dialog>
+    <div id="toast" class="toast" role="status"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
