@@ -47,7 +47,7 @@ async function loadFiles(files,label='images') {
   for(let i=0;i<valid.length;i++){
     try {
       const processed=await thumbFor(valid[i]);
-      state.items.push({id:crypto.randomUUID(),file:valid[i],name:valid[i].name.replace(/\.[^.]+$/,''),...processed});
+      state.items.push({id:crypto.randomUUID(),file:valid[i],name:valid[i].name.replace(/\.[^.]+$/,''),directory:valid[i].webkitRelativePath?.split('/').slice(0,-1).join('/')||'',...processed});
       // Render immediately: the first image appears as soon as it is decoded,
       // with a refresh every few files so large folders never show a blank wall.
       if(i===0 || i%4===3){ relayout({fitView:i===0}); $('#dataset-name').textContent=`${label} · ${state.items.length} images`; }
@@ -58,7 +58,7 @@ async function loadFiles(files,label='images') {
   toast(`${state.items.length} images ready · originals open only when clicked`);
 }
 function hit(clientX,clientY) { const r=canvas.getBoundingClientRect(),wx=(clientX-r.left-state.x)/state.scale,wy=(clientY-r.top-state.y)/state.scale;return [...visibleItems()].reverse().find(i=>wx>=i.x&&wx<=i.x+i.dw&&wy>=i.y&&wy<=i.y+i.dh); }
-function open(item) { if(state.fullUrl)URL.revokeObjectURL(state.fullUrl);state.fullUrl=URL.createObjectURL(item.file);$('#full-image').src=state.fullUrl;$('#full-caption').textContent=`${item.name} · full resolution`;$('#viewer').showModal(); }
+function open(item) { if(state.fullUrl)URL.revokeObjectURL(state.fullUrl);state.fullUrl=URL.createObjectURL(item.file);$('#full-image').src=state.fullUrl;$('#full-caption').textContent=`${item.name} · ${item.directory||'Images'} · full resolution`;$('#viewer').showModal(); }
 canvas.addEventListener('wheel',e=>{e.preventDefault();const old=state.scale,next=Math.max(.06,Math.min(3,old*(e.deltaY<0?1.12:.89))),r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;state.x=x-(x-state.x)*next/old;state.y=y-(y-state.y)*next/old;state.scale=next;draw()},{passive:false});
 $('#btn-folder').onclick=()=>$('#folder-input').click();$('#btn-empty-folder').onclick=()=>$('#folder-input').click();$('#btn-images').onclick=()=>$('#image-input').click();$('#folder-input').onchange=e=>{loadFiles(e.target.files,'Folder');e.target.value=''};$('#image-input').onchange=e=>{loadFiles(e.target.files,'Library');e.target.value=''};$('#btn-fit').onclick=fit;$('#btn-clear').onclick=()=>{if(!state.items.length||confirm('Clear this image wall?')){state.items.forEach(i=>i.thumb.close?.());state.items=[];state.selected.clear();refreshSelectionToolbar();state.page=1;state.faceFilter='all';state.peopleFilter='all';filterControls.innerHTML='';filterControls.style.display='none';state.hovered=null;state.duplicateGroups=[];state.activeDraftIds=null;state.savedDraftPositions=null;state.revealedIds.clear();state.clipActive=false;projectionCount=0;projectionRun++;activeMoves.clear();if(moveFrame){cancelAnimationFrame(moveFrame);moveFrame=0;}setDraftControlsDisabled(false);$('#active-draft-banner').hidden=true;$('#btn-restore-duplicates').hidden=true;$('#workflow-status').textContent='You choose what makes the final cut.';state.scale=1;state.x=state.y=0;$('#dataset-name').textContent='No images loaded';draw()}};$('#toggle-captions').onchange=e=>{state.captions=e.target.checked;relayout({fitView:true})};$('#toggle-tight').onchange=e=>{state.tight=e.target.checked;relayout({fitView:true})};$('#size-range').oninput=e=>{state.size=+e.target.value;relayout({fitView:true})};$('#layout-controls').onclick=e=>{const button=e.target.closest('[data-layout]');if(!button||state.activeDraftIds)return;state.layout=button.dataset.layout;document.querySelectorAll('.layout').forEach(x=>x.classList.toggle('active',x===button));$('#layout-caption').textContent=labels[state.layout];relayout({fitView:true})};$('#btn-close').onclick=()=>$('#viewer').close();$('#viewer').addEventListener('close',()=>{if(state.fullUrl){URL.revokeObjectURL(state.fullUrl);state.fullUrl=null}});
 function svgFile(color,accent,name){return new File([`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="${400+name.length*9}"><rect width="100%" height="100%" fill="${color}"/><circle cx="580" cy="170" r="160" fill="${accent}"/><path d="M0 470Q250 250 800 480V700H0Z" fill="#fff" opacity=".32"/></svg>`],`${name}.svg`,{type:'image/svg+xml'})}$('#btn-sample').onclick=()=>loadFiles([svgFile('#e9be92','#d86b4b','Small rituals'),svgFile('#aec5c8','#5c8391','Open air'),svgFile('#d7d1b6','#778c6c','Field notes'),svgFile('#d6bed0','#976f88','Soft strength'),svgFile('#2e3030','#e4bf5c','Night work')],'Sample');resize();draw();
@@ -235,11 +235,11 @@ const resetPageSelection=()=>{state.selected.clear();refreshSelectionToolbar();}
 // shifts hit-testing, highlights, or marquee selection away from the cursor.
 const localPoint=(event)=>{const r=canvas.getBoundingClientRect();return{x:event.clientX-r.left,y:event.clientY-r.top};};
 canvas.addEventListener('pointerdown',(event)=>{
-  if(event.button!==0)return;
   const point=localPoint(event), item=hit(event.clientX,event.clientY);
-  if(event.shiftKey&&!item){state.gesture={kind:'marquee',start:point,now:point};state.marquee={x:point.x,y:point.y,nowX:point.x,nowY:point.y};}
-  else if(item){activeMoves.delete(item.id);state.gesture={kind:'item',item,start:point,x:item.x,y:item.y,moved:false};}
-  else {state.gesture={kind:'pan',start:point,x:state.x,y:state.y,moved:false};canvas.classList.add('dragging');}
+  if(event.button===2&&!item||event.button===0&&(event.shiftKey||spacePan)&&!item){state.gesture={kind:'pan',start:point,x:state.x,y:state.y,moved:false};canvas.classList.add('dragging');}
+  else if(event.button===0&&!item){state.gesture={kind:'marquee',start:point,now:point};state.marquee={x:point.x,y:point.y,nowX:point.x,nowY:point.y};}
+  else if(event.button===0&&item){activeMoves.delete(item.id);state.gesture={kind:'item',item,start:point,x:item.x,y:item.y,moved:false};}
+  else return;
   canvas.setPointerCapture(event.pointerId); draw();
 });
 canvas.addEventListener('pointermove',(event)=>{
@@ -253,12 +253,14 @@ canvas.addEventListener('pointermove',(event)=>{
 });
 canvas.addEventListener('pointerup',(event)=>{
   const gesture=state.gesture;if(!gesture)return;state.gesture=null;canvas.classList.remove('dragging');
-  if(gesture.kind==='item'&&!gesture.moved)open(gesture.item);
+
   if(gesture.kind==='marquee'){state.marquee=null;refreshSelectionToolbar();} draw();
 });
 canvas.addEventListener('pointercancel',()=>{state.gesture=null;state.marquee=null;canvas.classList.remove('dragging');canvas.style.cursor='grab';draw();});
 canvas.addEventListener('pointerleave',()=>{if(!state.gesture&&state.hovered){state.hovered=null;draw();}});
 canvas.addEventListener('contextmenu',(event)=>{event.preventDefault();const item=hit(event.clientX,event.clientY);if(item)pullFive(item);});
+canvas.addEventListener('dblclick',event=>{const item=hit(event.clientX,event.clientY);if(item)open(item);});
+let spacePan=false;window.addEventListener('keydown',event=>{if(event.code==='Space'&&!event.repeat&&!['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)){spacePan=true;event.preventDefault();}});window.addEventListener('keyup',event=>{if(event.code==='Space')spacePan=false;});window.addEventListener('blur',()=>{spacePan=false;});
 const drawWithPointerFeedback=draw;draw=function pointerFeedbackDraw(){drawWithPointerFeedback();if(!state.hovered||!visibleItems().includes(state.hovered))return;const item=state.hovered;ctx.save();ctx.strokeStyle='#e16d45';ctx.lineWidth=2;ctx.strokeRect(state.x+item.x*state.scale-3,state.y+item.y*state.scale-3,item.dw*state.scale+6,item.dh*state.scale+6);ctx.restore();};
 const filterControls=document.createElement('div');filterControls.style.cssText='display:none;margin-top:8px;gap:5px;flex-wrap:wrap';filterControls.id='ai-filters';document.querySelector('#ai-status').after(filterControls);
 function renderAiFilters(){
