@@ -25,7 +25,7 @@ It borrows the performance and spatial-analysis strength of the sibling referenc
 
 - Vanilla HTML/CSS/ES modules, Vite only as a development/build tool.
 - A single HTML canvas is the wall. It avoids hundreds of expensive DOM image cards.
-- `src/image-worker.js` decodes an image, creates a maximum-320px `ImageBitmap`, and extracts visual features off the main thread.
+- `src/image-worker.js` decodes an image, creates a maximum-256px `ImageBitmap`, calculates a perceptual hash, and extracts visual features off the main thread.
 - Original browser `File` objects remain in memory only for the on-demand full-resolution dialog and opt-in AI scans.
 - Production build: `npm run build`.
 
@@ -61,8 +61,8 @@ Avoid assigning two outcomes to the same gesture. This was a past UX failure.
 
 - Upload image files or an image folder (`webkitdirectory`).
 - Streaming import: decoded images appear during import rather than after the full folder completes.
-- Worker-side thumbnail generation, dimensions, and feature analysis.
-- Display thumbnails capped at 320px; originals are loaded only for detail view or AI work.
+- Worker-side thumbnail generation, dimensions, perceptual hashes, and feature analysis.
+- Preview bitmaps capped at 256px; the wall starts with smaller 128px tiles. Originals are loaded only for detail view or AI work.
 - Page caps: 250, 500, 1,000, or All rendered images per page.
 - Worker-side projection calculations so PCA/UMAP don't freeze the canvas.
 
@@ -81,12 +81,14 @@ Avoid assigning two outcomes to the same gesture. This was a past UX failure.
 - KNN pulls with easing animation.
 - Local marquee selection and tidy pack.
 - Reset back to canonical layout positions.
+- Review near-duplicate frames using perceptual hashes; chosen rejects are hidden from the wall and can be restored.
+- Draft three editable carousel directions with local CLIP text/image matching and a diversity pass. The user chooses the final images.
 
 ### AI Lab (all on demand)
 
 - **Face scan:** MediaPipe BlazeFace (~230 KB) reports per-image face count.
 - **People scan:** MediaPipe person detector (~4.6 MB) reports per-image person count.
-- **Understand images:** CLIP ViT-B/32 (~85 MB) creates semantic image embeddings for KNN and maps.
+- **Understand images:** CLIP ViT-B/32 image and text components create semantic image embeddings for KNN, maps, and carousel drafts; the first run is a large browser-cached download.
 - AI model cache: face/person assets use `gelato-ai-models-v1`; CLIP uses Transformers.js browser cache. A clear-cache control exists.
 - Filter chips after scans: All / none / one / 2+ faces or people.
 - Manual people workflow: Shift-select photos then use **Name people**. This is a local editable label displayed as an image badge.
@@ -106,7 +108,7 @@ Do not add these unless the product brief changes:
 1. **Validate the large-folder path in a real browser.** The worker pipeline is implemented, but performance testing should use 1,000 real JPEGs and memory/timeline profiling.
 2. **Page-aware layout.** Pagination caps rendering, but pack/grid still calculate canonical positions across the complete library. Improve the active-page fit and paging UX if it feels sparse.
 3. **KNN placement parity.** Gelato has animated ring pulls, but VizThatThing's collision-aware repeated-ring placement should be ported fully if dense boards overlap.
-4. **AI inference quality.** Face/person detectors currently receive thumbnail-derived canvases. Upgrade to a dedicated temporary 640px inference canvas from the original `File`, as VizThatThing does.
+4. **AI inference quality.** Face/person detectors use a temporary 640px canvas decoded from the original `File`, matching the reference workbench's approach.
 5. **People suggestions.** Face detection alone cannot identify people. A proper same-person suggestion feature needs a face-embedding model, local clustering, a review screen, merge/split controls, and named local groups. Follow the Google Photos pattern: suggestions are editable; names are private/local; people can be removed or reassigned.
 6. **CLIP themes.** Add editable, plain-language theme chips (for example portrait, street, nature) using zero-shot CLIP text prompts, like VizThatThing, but keep the UX simple.
 7. **Tests.** Add browser-level tests for import, selection, pointer precedence, worker fallback, paging, and full-resolution open/close URL cleanup.

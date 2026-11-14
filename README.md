@@ -2,7 +2,9 @@
 
 A fast, local-first image wall for seeing a whole folder of references at once.
 
-Upload a folder, get a bird's-eye view, pan and zoom around it, then click any image when you need its original file at full resolution. Gelato renders only small 320px thumbnail bitmaps on the canvas; the original image is opened only on demand.
+Upload a folder, get a bird's-eye view, pan and zoom around it, then click any image when you need its original file at full resolution. Gelato keeps worker-created preview bitmaps to a maximum of 256px and opens the original only on demand. The wall starts with smaller 128px tiles so more of the set fits in view.
+
+Use **Find similar frames** to review near-duplicates and hide the frames you do not want to keep. Nothing is deleted. **Draft 3 carousels** uses local CLIP image and text matching to suggest three editable sequences; Gelato does not choose a winner for you.
 
 ## Run
 
