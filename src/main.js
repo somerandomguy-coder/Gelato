@@ -1,9 +1,8 @@
-import './style.css';
-
 const $ = (s) => document.querySelector(s);
 const stage = $('#canvas-stage');
 const itemsEl = $('#canvas-items');
 const input = $('#image-input');
+const folderInput = $('#folder-input');
 const state = {
   scale: 1, panX: 0, panY: 0, items: [], selected: new Set(), activeTerritory: 'all',
   territories: [
@@ -68,13 +67,28 @@ function renderItems() {
 }
 
 function addItem(item) { state.items.push({ id: crypto.randomUUID(), z: ++state.z, territory: state.territories[state.items.length % state.territories.length].id, ...item }); render(); }
-function addImages(files) {
-  [...files].filter((file) => file.type.startsWith('image/')).forEach((file, index) => {
+function addImages(files, { birdseye = false } = {}) {
+  const images = [...files].filter((file) => file.type.startsWith('image/'));
+  if (!images.length) return toast('That folder has no supported image files');
+  const columns = Math.max(3, Math.ceil(Math.sqrt(images.length * 1.45)));
+  const tile = images.length > 80 ? 140 : images.length > 30 ? 165 : 205;
+  const startIndex = state.items.length;
+  let complete = 0;
+  images.forEach((file, index) => {
     const reader = new FileReader();
-    reader.onload = () => addItem({ type: 'image', name: file.name.replace(/\.[^.]+$/, ''), src: reader.result, x: 180 + (state.items.length % 4) * 245 + index * 14, y: 150 + (state.items.length % 3) * 190, w: 205, h: 190 });
+    reader.onload = () => {
+      const position = startIndex + index;
+      addItem({
+        type: 'image', name: file.name.replace(/\.[^.]+$/, ''), src: reader.result,
+        x: 100 + (position % columns) * (tile + 28), y: 90 + Math.floor(position / columns) * (tile + 46),
+        w: tile, h: tile, sourcePath: file.webkitRelativePath || file.name
+      });
+      complete += 1;
+      if (birdseye && complete === images.length) requestAnimationFrame(fit);
+    };
     reader.readAsDataURL(file);
   });
-  if (files.length) toast(`${files.length} reference${files.length === 1 ? '' : 's'} added locally`);
+  toast(`${images.length} reference${images.length === 1 ? '' : 's'} added locally${birdseye ? ' · bird’s-eye view ready' : ''}`);
 }
 
 function startItemGesture(event) {
@@ -118,7 +132,8 @@ function addNote() { const text=prompt('What do you want to remember about this 
 function demoSvg(color, accent, word) { return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="600" height="480" viewBox="0 0 600 480"><rect width="600" height="480" fill="${color}"/><circle cx="420" cy="150" r="130" fill="${accent}" opacity=".85"/><path d="M0 370C150 275 280 505 600 320V480H0Z" fill="#ffffff" opacity=".45"/><text x="45" y="85" fill="#24221f" font-family="serif" font-size="42" font-style="italic">${word}</text></svg>`)}`; }
 function loadDemo() { if (state.items.length && !confirm('Replace the current board with the example direction?')) return; state.items=[]; state.selected.clear(); const refs=[['#e7bd91','#d66948','Small rituals'],['#a9bec1','#53798a','At your pace'],['#d9d0b4','#748261','Field notes'],['#cdbccc','#875e78','Soft strength'],['#272729','#dfbd5e','Make it matter']]; refs.forEach(([color,accent,name],index)=>addItem({type:'image',name,src:demoSvg(color,accent,name),x:150+(index%3)*245,y:100+Math.floor(index/3)*250,w:210,h:210,territory:state.territories[index%4].id})); addItem({type:'note',text:'Not a mood. A point of view people can recognise before they can name it.',x:420,y:370,w:205,h:125,territory:'human'}); renderNotes(); fit(); toast('Example direction loaded'); }
 
-$('#btn-add-images').onclick=()=>input.click(); $('#btn-empty-add').onclick=()=>input.click(); input.onchange=(e)=>{addImages(e.target.files); input.value='';}; $('#btn-load-demo').onclick=loadDemo;
+$('#btn-add-images').onclick=()=>input.click(); $('#btn-empty-add').onclick=()=>input.click(); input.onchange=(e)=>{addImages(e.target.files); input.value='';};
+$('#btn-add-folder').onclick=()=>folderInput.click(); $('#btn-empty-folder').onclick=()=>folderInput.click(); folderInput.onchange=(e)=>{addImages(e.target.files,{birdseye:true}); folderInput.value='';}; $('#btn-load-demo').onclick=loadDemo;
 $('#btn-zoom-in').onclick=()=>zoom(1.2); $('#btn-zoom-out').onclick=()=>zoom(.83); $('#btn-fit').onclick=fit;
 $('#btn-add-note').onclick=addNote; $('#btn-close-lightbox').onclick=()=>$('#lightbox').close();
 $('#btn-delete-selection').onclick=()=>{state.items=state.items.filter((item)=>!state.selected.has(item.id));state.selected.clear();renderNotes();render();};
