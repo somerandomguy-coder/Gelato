@@ -47,7 +47,7 @@ async function loadFiles(files,label='images') {
     } catch { /* skip an unreadable image, keep streaming the rest */ }
   }
   $('#dataset-name').textContent=`${label} · ${state.items.length} images`;
-  relayout({fitView:true});
+  relayout({fitView:true}); if(state.items.length>state.pageSize)requestAnimationFrame(fitPage);
   toast(`${state.items.length} images ready · originals open only when clicked`);
 }
 function hit(clientX,clientY) { const r=canvas.getBoundingClientRect(),wx=(clientX-r.left-state.x)/state.scale,wy=(clientY-r.top-state.y)/state.scale;return [...state.items].reverse().find(i=>wx>=i.x&&wx<=i.x+i.dw&&wy>=i.y&&wy<=i.y+i.dh); }
