@@ -1,6 +1,6 @@
 const $ = (s) => document.querySelector(s);
 const canvas = $('#wall'), ctx = canvas.getContext('2d');
-const state = { items: [], layout: 'pack', size: 170, captions: false, tight: true, scale: 1, x: 0, y: 0, pointer: null, fullUrl: null, dragged: null, selected: new Set(), marquee: null };
+const state = { items: [], layout: 'pack', size: 170, captions: false, tight: true, scale: 1, x: 0, y: 0, pointer: null, fullUrl: null, dragged: null, selected: new Set(), marquee: null, faceFilter:'all', peopleFilter:'all' };
 const labels = { pack: 'Tight board', grid: 'Browse', pca: 'Visual map · PCA', umap: 'Style neighbourhoods · UMAP', color: 'Colour mood · colour grade' };
 const toast = (message) => { const el = $('#toast'); el.textContent = message; el.classList.add('show'); clearTimeout(toast.timer); toast.timer = setTimeout(() => el.classList.remove('show'), 2200); };
 
@@ -120,7 +120,7 @@ async function scanWith(kind) {
       const results=detector.detect(work).detections || []; item.ai ||= {}; item.ai[kind]=results.length; found+=results.length;
       if (index%3===0) { aiStatus(`Scanning ${kind === 'face' ? 'faces' : 'people'} · ${index+1}/${state.items.length}`); await new Promise(requestAnimationFrame); }
     }
-    aiStatus(`${kind === 'face' ? 'Faces' : 'People'} complete · ${found} found`); toast(`${found} ${kind === 'face' ? 'faces' : 'people'} found locally`);
+    aiStatus(`${kind === 'face' ? 'Faces' : 'People'} complete · ${found} found`); renderAiFilters(); draw(); toast(`${found} ${kind === 'face' ? 'faces' : 'people'} found locally`);
   } catch (error) { aiStatus(`Scan failed: ${error.message}`); toast('AI scan could not start — check connection'); }
   finally { button.disabled=false; }
 }
@@ -176,3 +176,28 @@ canvas.addEventListener('pointerdown',(event)=>{if(event.button!==0||!event.shif
 canvas.addEventListener('pointermove',(event)=>{if(!state.marquee)return;event.stopImmediatePropagation();state.marquee.nowX=event.clientX;state.marquee.nowY=event.clientY;const left=Math.min(state.marquee.x,event.clientX),right=Math.max(state.marquee.x,event.clientX),top=Math.min(state.marquee.y,event.clientY),bottom=Math.max(state.marquee.y,event.clientY),rect=canvas.getBoundingClientRect();state.selected=new Set(state.items.filter(item=>{const x=rect.left+state.x+item.x*state.scale,y=rect.top+state.y+item.y*state.scale;return x<right&&x+item.dw*state.scale>left&&y<bottom&&y+item.dh*state.scale>top;}).map(item=>item.id));draw();},true);
 canvas.addEventListener('pointerup',(event)=>{if(!state.marquee)return;event.stopImmediatePropagation();state.marquee=null;refreshSelectionToolbar();},true);
 canvas.addEventListener('pointerdown',(event)=>{if(event.button!==2)return;const item=hit(event.clientX,event.clientY);if(!item)return;event.preventDefault();event.stopImmediatePropagation();pullFive(item);},true);
+
+function matchesAiFilter(item) {
+  const faces=item.ai?.face, people=item.ai?.people;
+  const matches=(count,filter)=>filter==='all'||(filter==='none'&&count===0)||(filter==='one'&&count===1)||(filter==='many'&&count>=2);
+  return matches(faces ?? 0,state.faceFilter)&&matches(people ?? 0,state.peopleFilter);
+}
+const drawBeforeAiFilters=draw;
+draw=function drawWithAiFilters(){
+  // Keep spatial coordinates intact: filters hide matching thumbnails rather than
+  // recomputing the layout and losing the user's carefully arranged board.
+  const all=state.items; state.items=all.filter(matchesAiFilter); drawBeforeAiFilters(); state.items=all;
+  const rect=canvas.getBoundingClientRect();ctx.save();ctx.font='10px "DM Mono"';
+  for(const item of all){if(!matchesAiFilter(item)||(!item.ai?.face&&!item.ai?.people))continue;const x=state.x+(item.x+4)*state.scale,y=state.y+(item.y+4)*state.scale;let label='';if(item.ai?.face)label+=`◉ ${item.ai.face}`;if(item.ai?.people)label+=`${label?'  ':''}♙ ${item.ai.people}`;ctx.fillStyle='rgba(24,24,22,.82)';const width=ctx.measureText(label).width+10;ctx.fillRect(x,y,width,17);ctx.fillStyle='#fff';ctx.fillText(label,x+5,y+12);}
+  ctx.restore();
+};
+const rawHit=hit;
+hit=function filteredHit(clientX,clientY){const item=rawHit(clientX,clientY);return item&&matchesAiFilter(item)?item:undefined;};
+const filterControls=document.createElement('div');filterControls.style.cssText='display:none;margin-top:8px;gap:5px;flex-wrap:wrap';filterControls.id='ai-filters';document.querySelector('#ai-status').after(filterControls);
+function renderAiFilters(){
+  const facesDone=state.items.some(item=>item.ai?.face!==undefined),peopleDone=state.items.some(item=>item.ai?.people!==undefined);if(!facesDone&&!peopleDone)return;
+  const chip=(kind,value,label,active)=>`<button class="button" data-kind="${kind}" data-value="${value}" style="padding:4px 6px;font-size:10px;${active?'background:#1d1d1b;color:white':''}">${label}</button>`;
+  filterControls.innerHTML=(facesDone?`<span style="width:100%;font:10px 'DM Mono';color:#777770">FACES</span>${chip('face','all','All',state.faceFilter==='all')}${chip('face','none','No face',state.faceFilter==='none')}${chip('face','one','1 face',state.faceFilter==='one')}${chip('face','many','2+ faces',state.faceFilter==='many')}`:'')+(peopleDone?`<span style="width:100%;font:10px 'DM Mono';color:#777770;margin-top:4px">PEOPLE</span>${chip('people','all','All',state.peopleFilter==='all')}${chip('people','none','No person',state.peopleFilter==='none')}${chip('people','one','1 person',state.peopleFilter==='one')}${chip('people','many','2+ people',state.peopleFilter==='many')}`:'');
+  filterControls.style.display='flex';
+  filterControls.querySelectorAll('[data-kind]').forEach(button=>button.onclick=()=>{state[button.dataset.kind==='face'?'faceFilter':'peopleFilter']=button.dataset.value;renderAiFilters();draw();});
+}
