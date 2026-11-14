@@ -92,16 +92,15 @@ function pullFive(anchor) {
 }
 // Right-click owns one interaction only: pull similar images. It never falls through
 // to the normal click/release handler that opens the full-resolution viewer.
-canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+canvas.addEventListener('contextmenu', (event) => { event.preventDefault(); const item=hit(event.clientX,event.clientY); if(item)pullFive(item); });
 canvas.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return; const item = hit(event.clientX, event.clientY); if (!item) return;
-  event.stopImmediatePropagation(); state.dragged = { item, x:event.clientX, y:event.clientY, ix:item.x, iy:item.y, moved:false }; canvas.setPointerCapture(event.pointerId);
+  event.stopImmediatePropagation(); state.dragged = { item, moved:false }; canvas.setPointerCapture(event.pointerId);
 }, true);
 canvas.addEventListener('pointermove', (event) => {
-  const drag = state.dragged; if (!drag) return; event.stopImmediatePropagation(); const dx=(event.clientX-drag.x)/state.scale, dy=(event.clientY-drag.y)/state.scale;
-  if (Math.hypot(dx,dy)>3/state.scale) drag.moved=true; drag.item.x=drag.ix+dx; drag.item.y=drag.iy+dy; drag.item.manual=true; draw();
+  const drag = state.dragged; if (!drag) return; event.stopImmediatePropagation();
 }, true);
-canvas.addEventListener('pointerup', (event) => { const drag=state.dragged; if(!drag)return; event.stopImmediatePropagation(); state.dragged=null; if(!drag.moved)open(drag.item); }, true);
+canvas.addEventListener('pointerup', (event) => { const drag=state.dragged; if(!drag)return; event.stopImmediatePropagation(); state.dragged=null; open(drag.item); }, true);
 
 // AI Lab — deliberately lazy. These URLs are not contacted until one of the three
 // buttons below is pressed by the person using the wall.
@@ -197,7 +196,7 @@ draw=function drawSelections(){drawWithAxes();if(!state.selected.size&&!state.ma
 canvas.addEventListener('pointerdown',(event)=>{if(event.button!==0||!event.shiftKey||hit(event.clientX,event.clientY))return;event.stopImmediatePropagation();state.marquee={x:event.clientX,y:event.clientY,nowX:event.clientX,nowY:event.clientY};canvas.setPointerCapture(event.pointerId);draw();},true);
 canvas.addEventListener('pointermove',(event)=>{if(!state.marquee)return;event.stopImmediatePropagation();state.marquee.nowX=event.clientX;state.marquee.nowY=event.clientY;const left=Math.min(state.marquee.x,event.clientX),right=Math.max(state.marquee.x,event.clientX),top=Math.min(state.marquee.y,event.clientY),bottom=Math.max(state.marquee.y,event.clientY),rect=canvas.getBoundingClientRect();state.selected=new Set(state.items.filter(item=>{const x=rect.left+state.x+item.x*state.scale,y=rect.top+state.y+item.y*state.scale;return x<right&&x+item.dw*state.scale>left&&y<bottom&&y+item.dh*state.scale>top;}).map(item=>item.id));draw();},true);
 canvas.addEventListener('pointerup',(event)=>{if(!state.marquee)return;event.stopImmediatePropagation();state.marquee=null;refreshSelectionToolbar();},true);
-canvas.addEventListener('pointerdown',(event)=>{if(event.button!==2)return;const item=hit(event.clientX,event.clientY);if(!item)return;event.preventDefault();event.stopImmediatePropagation();pullFive(item);},true);
+canvas.addEventListener('pointerdown',(event)=>{if(event.button!==2)return;event.preventDefault();event.stopImmediatePropagation();},true);
 
 function matchesAiFilter(item) {
   const faces=item.ai?.face, people=item.ai?.people;
