@@ -87,7 +87,7 @@ function cosine(a, b) { if(!a||!b||a.length!==b.length||!a.length)return -2;let 
 function vectorFor(item){return state.clipActive&&item.embedding?item.embedding:item.features;}
 function pullFive(anchor) {
   anchor.pulled ||= new Set();
-  const picks = availableItems().filter(item => item !== anchor && !anchor.pulled.has(item.id)).map(item => ({ item, score: cosine(vectorFor(anchor), vectorFor(item)) })).filter(row=>row.score>-1).sort((a,b) => b.score-a.score).slice(0,5);
+  const picks = state.items.filter(item => item !== anchor && !item.duplicateHidden && !anchor.pulled.has(item.id)).map(item => ({ item, score: cosine(vectorFor(anchor), vectorFor(item)) })).filter(row=>row.score>-1).sort((a,b) => b.score-a.score).slice(0,5);
   if (!picks.length) return toast('No more unseen similar images');
   const start = anchor.pulled.size, base = Math.max(anchor.dw, anchor.dh, state.size) + gap() + 20;
   const moves=[];
@@ -199,7 +199,7 @@ function matchesAiFilter(item) {
   return matches(faces,state.faceFilter)&&matches(people,state.peopleFilter);
 }
 function availableItems(){return state.items.filter(item=>!item.duplicateHidden&&matchesAiFilter(item)&&(!state.activeDraftIds||state.activeDraftIds.has(item.id)));}
-function visibleItems(){const all=availableItems(),start=(state.page-1)*state.pageSize,page=all.slice(start,start+state.pageSize),ids=new Set(page.map(item=>item.id));return page.concat(all.filter(item=>state.revealedIds.has(item.id)&&!ids.has(item.id)));}
+function visibleItems(){const all=availableItems(),start=(state.page-1)*state.pageSize,page=all.slice(start,start+state.pageSize),ids=new Set(page.map(item=>item.id));return page.concat(state.items.filter(item=>state.revealedIds.has(item.id)&&!item.duplicateHidden&&!ids.has(item.id)));}
 const drawBeforeAiFilters=draw;
 draw=function drawWithAiFilters(){
   // Keep spatial coordinates intact: filters hide matching thumbnails rather than
@@ -207,7 +207,7 @@ draw=function drawWithAiFilters(){
   const all=state.items, rendered=visibleItems();
   state.items=rendered;
   try { drawBeforeAiFilters(); } finally { state.items=all; }
-  $('#image-count').textContent=all.length;$('#empty').hidden=all.length>0;$('#no-matches').hidden=!all.length||rendered.length>0;
+  $('#image-count').textContent=all.length;$('#empty').hidden=all.length>0;$('#no-matches').hidden=!all.length||rendered.length>0||state.faceFilter==='all'&&state.peopleFilter==='all';
   ctx.save();ctx.font='10px "DM Mono"';
   for(const item of rendered){const hasFaces=item.ai?.face!==undefined,hasPeople=item.ai?.people!==undefined;if(!hasFaces&&!hasPeople&&!item.peopleName)continue;const x=state.x+(item.x+4)*state.scale,y=state.y+(item.y+4)*state.scale;let label=item.peopleName?`◉ ${item.peopleName}`:'';if(hasFaces){const count=item.ai.face,tag=count===0?'No face':count===1?'1 face':'2+ faces';label+=`${label?'  ':''}${tag}`;}if(hasPeople){const count=item.ai.people,tag=count===0?'No person':count===1?'1 person':'2+ people';label+=`${label?'  ':''}${tag}`;}ctx.fillStyle='rgba(24,24,22,.82)';const width=ctx.measureText(label).width+10;ctx.fillRect(x,y,width,17);ctx.fillStyle='#fff';ctx.fillText(label,x+5,y+12);}
   ctx.restore();
@@ -238,7 +238,7 @@ canvas.addEventListener('pointerdown',(event)=>{
   const point=localPoint(event), item=hit(event.clientX,event.clientY);
   if(event.button===2&&!item||event.button===0&&(event.shiftKey||spacePan)&&!item){state.gesture={kind:'pan',start:point,x:state.x,y:state.y,moved:false};canvas.classList.add('dragging');}
   else if(event.button===0&&!item){state.gesture={kind:'marquee',start:point,now:point};state.marquee={x:point.x,y:point.y,nowX:point.x,nowY:point.y};}
-  else if(event.button===0&&item){activeMoves.delete(item.id);state.gesture={kind:'item',item,start:point,x:item.x,y:item.y,moved:false};}
+  else if(event.button===0&&item){const items=state.selected.has(item.id)?state.items.filter(candidate=>state.selected.has(candidate.id)):[item];items.forEach(candidate=>activeMoves.delete(candidate.id));state.gesture={kind:items.length>1?'group':'item',item,items,start:point,positions:items.map(candidate=>({item:candidate,x:candidate.x,y:candidate.y})),x:item.x,y:item.y,moved:false};}
   else return;
   canvas.setPointerCapture(event.pointerId); draw();
 });
@@ -248,6 +248,7 @@ canvas.addEventListener('pointermove',(event)=>{
   const dx=point.x-gesture.start.x,dy=point.y-gesture.start.y;
   if(gesture.kind==='pan'){if(Math.hypot(dx,dy)>3)gesture.moved=true;state.x=gesture.x+dx;state.y=gesture.y+dy;}
   if(gesture.kind==='item'){if(Math.hypot(dx,dy)>4)gesture.moved=true;if(gesture.moved){gesture.item.x=gesture.x+dx/state.scale;gesture.item.y=gesture.y+dy/state.scale;gesture.item.manual=true;}}
+  if(gesture.kind==='group'){if(Math.hypot(dx,dy)>4)gesture.moved=true;if(gesture.moved)gesture.positions.forEach(({item,x,y})=>{item.x=x+dx/state.scale;item.y=y+dy/state.scale;item.manual=true;});}
   if(gesture.kind==='marquee'){gesture.now=point;state.marquee.nowX=point.x;state.marquee.nowY=point.y;const left=Math.min(gesture.start.x,point.x),right=Math.max(gesture.start.x,point.x),top=Math.min(gesture.start.y,point.y),bottom=Math.max(gesture.start.y,point.y);state.selected=new Set(visibleItems().filter(item=>{const x=state.x+item.x*state.scale,y=state.y+item.y*state.scale;return x<right&&x+item.dw*state.scale>left&&y<bottom&&y+item.dh*state.scale>top;}).map(item=>item.id));}
   draw();
 });

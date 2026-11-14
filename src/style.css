@@ -118,3 +118,5 @@ dialog::backdrop { background: #0009; }
 .layout:disabled { opacity: .45; cursor: not-allowed; }
 @media (max-width: 420px) { .rail { width: 160px; } .topbar { padding: 0 8px; } .wordmark img { width: 18px; height: 18px; } .actions .button { padding: 6px 7px; font-size: 10px; } }
 .toggle input:disabled + span { opacity: .5; }
+.no-matches { pointer-events: none; }
+.no-matches button { pointer-events: auto; }
