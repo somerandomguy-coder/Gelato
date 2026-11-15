@@ -1,24 +1,44 @@
 # Gelato
 
-A fast, local-first image wall for seeing a whole folder of references at once.
+**A lightweight, local-first photo wall for finding and gathering the images you want to keep.**
 
-Upload a folder, get a bird's-eye view, pan and zoom around it, then click any image when you need its original file at full resolution. Gelato keeps worker-created preview bitmaps to a maximum of 256px and opens the original only on demand. The wall starts with smaller 128px tiles so more of the set fits in view.
+Gelato turns a folder of photos into a visual wall you can browse, arrange, and curate. It runs in your browser, keeps your source files untouched, and is designed to work offline after the app has loaded.
 
-Use **Find similar frames** to review near-duplicates and hide the frames you do not want to keep. Nothing is deleted. **Draft 3 carousels** uses local CLIP image and text matching to suggest three editable sequences; Gelato does not choose a winner for you.
+![Gelato showing a visual wall of Wollongong coastline photos](docs/images/gelato-wollongong-wall.png)
 
-## Run
+Start with the folder picker, or try the app with its sample set:
+
+![Gelato's local photo wall welcome screen](docs/images/gelato-welcome.png)
+
+## What you can do
+
+- See a whole photo folder as a wall, grid, visual map, or colour mood board.
+- Pull five visually similar images, then select and arrange a group together.
+- Review similar frames and draft carousel sequences.
+- Copy selected original images into a new folder. Gelato makes copies; it does not move or alter your source files.
+- Keep the work on your device. Images are not uploaded by the app.
+
+## Run Gelato
+
+Requirements: Node.js and npm.
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Views
+Open the local URL printed by Vite, choose a photo folder, and start arranging. To make a production build:
 
-- **Tight board** — compact packed wall with no gaps by default.
-- **Browse** — simple grid for scanning.
-- **Visual map** — PCA projection of thumbnail colour, brightness and saturation.
-- **Style neighbourhoods** — a lightweight UMAP-style nearest-neighbour layout.
-- **Colour mood** — hue × brightness colour-grade field.
+```bash
+npm run build
+```
 
-Use the display controls to show filenames only when you need them, turn off tight spacing, change thumbnail size, or fit the entire collection back into view.
+## Privacy and offline use
+
+Photo selection, previews, layout, and curation run locally in your browser. Gelato does not send your images to a server. The app can be used offline after it has loaded, except for optional AI tools: choosing those tools downloads their required models and code, which are cached by the browser. You never need to use the AI tools to browse or arrange photos.
+
+Folder selection and copy-to-folder support depend on browser capabilities. A current Chromium-based browser is recommended for the full folder export workflow.
+
+## Acknowledgements
+
+Gelato adapts parts of its image projection, packing, and selection behavior from [VizThatThing](https://github.com/somerandomguy-coder/VizThatThing), with changes for this project.
