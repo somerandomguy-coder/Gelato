@@ -1,4 +1,4 @@
-// Deterministic 2D PCA, PCA-initialized UMAP, and K-Means++ with Auto-k Silhouette
+// Deterministic 2D PCA and PCA-initialised UMAP (adapted from VizThatThing).
 
 function createSeededRng(seed = 42) {
   let state = seed >>> 0;
@@ -22,9 +22,13 @@ function squaredEuclidean(a, b) {
 }
 
 function normalizeCoords2D(coords) {
+  return normalizeWithTransform(coords).coords;
+}
+
+function normalizeWithTransform(coords) {
   const n = coords.length;
-  if (n === 0) return [];
-  if (n === 1) return [[0, 0]];
+  if (n === 0) return { coords: [], cx: 0, cy: 0, span: 1 };
+  if (n === 1) return { coords: [[0, 0]], cx: coords[0][0], cy: coords[0][1], span: 1 };
 
   let minX = Infinity;
   let maxX = -Infinity;
@@ -46,10 +50,23 @@ function normalizeCoords2D(coords) {
   const spanY = (maxY - minY) / 2;
   const maxSpan = Math.max(spanX, spanY, 1e-9);
 
-  return coords.map(([x, y]) => [
-    Number(((x - cx) / maxSpan).toFixed(5)),
-    Number(((y - cy) / maxSpan).toFixed(5))
-  ]);
+  return {
+    coords: coords.map(([x, y]) => [Number(((x - cx) / maxSpan).toFixed(5)), Number(((y - cy) / maxSpan).toFixed(5))]),
+    cx, cy, span: maxSpan
+  };
+}
+
+/**
+ * Place new vectors on an existing PCA fit (same mean, axes and scale), so photos
+ * already on the map keep their positions when more are added.
+ */
+export function projectPCA(vectors, basis) {
+  const { mean, pc1, pc2, cx, cy, span } = basis, dim = mean.length;
+  return vectors.map(v => {
+    let x = 0, y = 0;
+    for (let d = 0; d < dim; d++) { const c = v[d] - mean[d]; x += c * pc1[d]; y += c * pc2[d]; }
+    return [(x - cx) / span, (y - cy) / span];
+  });
 }
 
 /**
@@ -164,9 +181,11 @@ export function computePCA(vectors) {
   const var1 = Number(Math.min(100, (pc1.eigVal / totalVar) * 100).toFixed(1));
   const var2 = Number(Math.min(100 - var1, (pc2.eigVal / totalVar) * 100).toFixed(1));
 
+  const norm = normalizeWithTransform(rawCoords);
   return {
-    coords: normalizeCoords2D(rawCoords),
-    varianceExplained: [var1, var2]
+    coords: norm.coords,
+    varianceExplained: [var1, var2],
+    basis: { mean, pc1: pc1.axis, pc2: pc2.axis, cx: norm.cx, cy: norm.cy, span: norm.span }
   };
 }
 
@@ -417,209 +436,3 @@ export function computeUMAP(vectors, options = {}) {
   }
   return { coords: normalizeCoords2D(finalCoords) };
 }
-
-function runSingleKMeans(vectors, k, rng, maxIter = 35) {
-  const n = vectors.length;
-  const dim = vectors[0].length;
-  const centroids = [];
-
-  // K-Means++ initialization
-  const firstIdx = Math.floor(rng() * n);
-  centroids.push(Float32Array.from(vectors[firstIdx]));
-
-  const minDistSq = new Float64Array(n).fill(Infinity);
-  for (let c = 1; c < k; c++) {
-    let sumD = 0;
-    const prevCentroid = centroids[c - 1];
-    for (let i = 0; i < n; i++) {
-      const d = squaredEuclidean(vectors[i], prevCentroid);
-      if (d < minDistSq[i]) minDistSq[i] = d;
-      sumD += minDistSq[i];
-    }
-
-    if (sumD <= 1e-12) {
-      centroids.push(Float32Array.from(vectors[c % n]));
-      continue;
-    }
-
-    let r = rng() * sumD;
-    let chosen = n - 1;
-    for (let i = 0; i < n; i++) {
-      r -= minDistSq[i];
-      if (r <= 0) {
-        chosen = i;
-        break;
-      }
-    }
-    centroids.push(Float32Array.from(vectors[chosen]));
-  }
-
-  const assignments = new Int32Array(n).fill(-1);
-  let inertia = 0;
-
-  for (let iter = 0; iter < maxIter; iter++) {
-    let changed = false;
-    inertia = 0;
-
-    for (let i = 0; i < n; i++) {
-      let bestC = 0;
-      let bestD = Infinity;
-      for (let c = 0; c < k; c++) {
-        const d = squaredEuclidean(vectors[i], centroids[c]);
-        if (d < bestD) {
-          bestD = d;
-          bestC = c;
-        }
-      }
-      inertia += bestD;
-      if (assignments[i] !== bestC) {
-        assignments[i] = bestC;
-        changed = true;
-      }
-    }
-
-    if (!changed && iter > 0) break;
-
-    const sums = Array.from({ length: k }, () => new Float64Array(dim));
-    const counts = new Int32Array(k);
-    for (let i = 0; i < n; i++) {
-      const c = assignments[i];
-      counts[c]++;
-      const v = vectors[i];
-      const s = sums[c];
-      for (let d = 0; d < dim; d++) s[d] += v[d];
-    }
-
-    for (let c = 0; c < k; c++) {
-      if (counts[c] > 0) {
-        for (let d = 0; d < dim; d++) {
-          centroids[c][d] = sums[c][d] / counts[c];
-        }
-      }
-    }
-  }
-
-  return { assignments: Array.from(assignments), centroids, inertia };
-}
-
-function computeSilhouetteScore(vectors, assignments, k) {
-  const n = vectors.length;
-  if (k <= 1 || k >= n) return 0;
-
-  // Subsample up to 240 points evenly so Auto-k remains instant even on large datasets
-  const maxSample = 240;
-  const step = Math.max(1, Math.floor(n / maxSample));
-  const sampleIndices = [];
-  for (let i = 0; i < n && sampleIndices.length < maxSample; i += step) {
-    sampleIndices.push(i);
-  }
-  const m = sampleIndices.length;
-
-  let totalSil = 0;
-  for (let si = 0; si < m; si++) {
-    const i = sampleIndices[si];
-    const ci = assignments[i];
-
-    const clusterSums = new Float64Array(k);
-    const clusterCnts = new Int32Array(k);
-
-    for (let sj = 0; sj < m; sj++) {
-      if (si === sj) continue;
-      const j = sampleIndices[sj];
-      const cj = assignments[j];
-      clusterSums[cj] += Math.sqrt(squaredEuclidean(vectors[i], vectors[j]));
-      clusterCnts[cj]++;
-    }
-
-    const a = clusterCnts[ci] > 0 ? clusterSums[ci] / clusterCnts[ci] : 0;
-    let b = Infinity;
-    for (let c = 0; c < k; c++) {
-      if (c === ci || clusterCnts[c] === 0) continue;
-      const meanOther = clusterSums[c] / clusterCnts[c];
-      if (meanOther < b) b = meanOther;
-    }
-    if (!Number.isFinite(b)) b = 0;
-    const denom = Math.max(a, b);
-    totalSil += denom > 1e-9 ? (b - a) / denom : 0;
-  }
-
-  return totalSil / Math.max(1, m);
-}
-
-/**
- * Deterministic K-Means++ clustering with Auto-k Silhouette search & medoid landmark discovery.
- */
-export function computeKMeans(vectors, options = {}) {
-  const n = vectors.length;
-  if (n === 0) {
-    return { assignments: [], k: 0, centroids: [], medoidIndices: [], counts: [], silhouette: 0 };
-  }
-  if (n === 1) {
-    return {
-      assignments: [0],
-      k: 1,
-      centroids: [Float32Array.from(vectors[0])],
-      medoidIndices: [0],
-      counts: [1],
-      silhouette: 1
-    };
-  }
-
-  const rng = createSeededRng(options.seed ?? 2026);
-  const maxK = Math.min(options.maxK ?? 8, n - 1);
-
-  const fitBestRestart = (targetK) => {
-    let best = null;
-    for (let r = 0; r < 3; r++) {
-      const candidate = runSingleKMeans(vectors, targetK, rng);
-      if (!best || candidate.inertia < best.inertia) {
-        best = candidate;
-      }
-    }
-    return best;
-  };
-
-  let chosenK = options.k === 'auto' || !options.k ? 2 : Math.max(1, Math.min(Number(options.k), n));
-  let bestRun = null;
-  let bestSilhouette = -1;
-
-  if (options.k === 'auto' || !options.k) {
-    const upperK = Math.max(2, maxK);
-    for (let candK = 2; candK <= upperK; candK++) {
-      const run = fitBestRestart(candK);
-      const sil = computeSilhouetteScore(vectors, run.assignments, candK);
-      if (sil > bestSilhouette) {
-        bestSilhouette = sil;
-        chosenK = candK;
-        bestRun = run;
-      }
-    }
-  } else {
-    bestRun = fitBestRestart(chosenK);
-    bestSilhouette = computeSilhouetteScore(vectors, bestRun.assignments, chosenK);
-  }
-
-  const counts = new Array(chosenK).fill(0);
-  const medoidIndices = new Array(chosenK).fill(0);
-  const bestMedoidDist = new Array(chosenK).fill(Infinity);
-
-  for (let i = 0; i < n; i++) {
-    const c = bestRun.assignments[i];
-    counts[c]++;
-    const d = squaredEuclidean(vectors[i], bestRun.centroids[c]);
-    if (d < bestMedoidDist[c]) {
-      bestMedoidDist[c] = d;
-      medoidIndices[c] = i;
-    }
-  }
-
-  return {
-    assignments: bestRun.assignments,
-    k: chosenK,
-    centroids: bestRun.centroids,
-    medoidIndices,
-    counts,
-    silhouette: Number(bestSilhouette.toFixed(3))
-  };
-}
-

@@ -1,22 +1,26 @@
 # Gelato
 
-**A lightweight, local-first photo wall for finding and gathering the images you want to keep.**
+**Pick the photos worth posting.**
 
-Gelato turns a folder of photos into a visual wall you can browse, arrange, and curate. It runs in your browser, keeps your source files untouched, and is designed to work offline after the app has loaded.
+Gelato turns a trip or event folder into one visual wall, so you can sort shots by vibe, clear out near-duplicates, and draft a LinkedIn or Instagram carousel in seconds. It runs in your browser, never uploads your photos, and never touches your original files.
 
-![Gelato showing a visual wall of Wollongong coastline photos](docs/images/gelato-wollongong-wall.png)
+![A Wollongong trip folder laid out on Gelato's Vibe map](docs/images/gelato-wollongong-wall.png)
 
-Start with the folder picker, or try the app with its sample set:
+Draft a carousel from the whole folder: name the moments you need and the shot mix, then swap anything you don't like.
 
-![Gelato's local photo wall welcome screen](docs/images/gelato-welcome.png)
+![Drafting a seven-slide carousel with a lighthouse and rocky coastline](docs/images/gelato-carousel.png)
+
+Start by choosing or dropping a folder, or try the built-in sample trip:
+
+![Gelato's welcome screen](docs/images/gelato-welcome.png)
 
 ## What you can do
 
-- See a whole photo folder as a wall, grid, visual map, or colour mood board.
-- Pull five visually similar images, then select and arrange a group together.
-- Review similar frames and draft carousel sequences.
-- Copy selected original images into a new folder. Gelato makes copies; it does not move or alter your source files.
-- Keep the work on your device. Images are not uploaded by the app.
+- **See everything at once.** A pan-and-zoom wall of the whole folder. Drag a folder onto the window to start.
+- **Sort by vibe.** Switch between Board, Timeline, Vibe map, Clusters and Colour views, and between **By look** (colour, light, composition) and **By content** (what's in the photo, using an on-device AI model). Adding photos never reshuffles the Vibe map; Clusters can be re-run on demand.
+- **Find more like this.** Right-click any photo to pull in its five closest lookalikes, then right-click again for five more.
+- **Clear similar shots.** Gelato groups bursts and re-takes, suggests the sharpest frame, and hides the rest (nothing is deleted).
+- **Draft a carousel.** Choose 5, 7 or 10 slides, name any must-have moments ("Golden Gate Bridge, team dinner"), set a solo/group/place mix, and spread the picks across days. Swap, remove or reorder any slide, then save the set to a folder in order.
 
 ## Run Gelato
 
@@ -35,7 +39,7 @@ npm run build
 
 ## Privacy and offline use
 
-Photo selection, previews, layout, and curation run locally in your browser. Gelato does not send your images to a server. The app can be used offline after it has loaded, except for optional AI tools: choosing those tools downloads their required models and code, which are cached by the browser. You never need to use the AI tools to browse or arrange photos.
+Previews, layout, similar-shot detection and curation run locally in your browser. Gelato does not send your images to a server. Carousel drafting and **By content** sorting use an image-understanding model (CLIP, about 150 MB) that also runs on your computer. It downloads the first time you use either and is then cached by the browser, so it works offline afterwards.
 
 Folder selection and copy-to-folder support depend on browser capabilities. A current Chromium-based browser is recommended for the full folder export workflow.
 

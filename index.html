@@ -1,10 +1,207 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Gelato — image space</title><link rel="stylesheet" href="./src/style.css" /></head>
-<body><header class="topbar"><a class="wordmark" href="#" aria-label="Gelato home"><img src="./gelato-mark.svg" alt="" width="22" height="22" />Gelato</a><span id="dataset-name" class="dataset-name">No images loaded</span><div class="actions"><button id="btn-folder" class="button primary">Choose folder</button><button id="btn-images" class="button">Add photos</button><input id="folder-input" type="file" accept="image/*" webkitdirectory directory multiple hidden /><input id="image-input" type="file" accept="image/*" multiple hidden /></div></header>
-<main><aside class="rail"><section><p class="eyebrow">LAYOUT</p><div id="layout-controls" class="layout-controls"><button class="layout active" data-layout="pack"><b>Tight board</b><small>Pack references together</small></button><button class="layout" data-layout="grid"><b>Browse</b><small>Simple scanning grid</small></button><button class="layout" data-layout="pca"><b>Visual map</b><small>Similar colour &amp; light · PCA</small></button><button class="layout" data-layout="umap"><b>Style neighbourhoods</b><small>Lookalikes sit closer · UMAP</small></button><button class="layout" data-layout="color"><b>Colour mood</b><small>Hue &amp; brightness · colour grade</small></button></div></section><section><p class="eyebrow">DISPLAY</p><label class="toggle"><input id="toggle-captions" type="checkbox" /><span></span> Show image names</label><label class="toggle"><input id="toggle-tight" type="checkbox" checked /><span></span> Tight spacing</label></section><section><p class="eyebrow">IMAGE SIZE</p><input id="size-range" type="range" min="64" max="256" value="128" /><div class="range-labels"><span>Small</span><span>Large</span></div></section><section class="workflow-section"><p class="eyebrow">MAKE THE PILE SMALLER</p><button id="btn-find-duplicates" class="button workflow">Find similar frames</button><button id="btn-draft-carousels" class="button workflow">Draft 3 carousels</button><button id="btn-restore-duplicates" class="link" hidden>Restore hidden frames</button><p id="workflow-status" class="workflow-status">You choose what makes the final cut.</p></section><section><p class="eyebrow">AI LAB · ON DEMAND</p><button id="btn-faces" class="button ai">Scan faces <small>~230 KB</small></button><button id="btn-people" class="button ai">Scan people <small>~4.6 MB</small></button><button id="btn-clip" class="button ai">Understand images <small>large download</small></button><p id="ai-status" class="ai-status">Nothing downloads until you choose a scan.</p></section><section class="stats"><p class="eyebrow">LIBRARY</p><strong id="image-count">0</strong> images<br /><span id="performance-note">Thumbnails are capped at 256px</span></section><div class="rail-bottom"><button id="btn-fit" class="button">Fit view</button><button id="btn-reset-layout" class="button" title="Return all images to the active layout’s original positions">Reset to original layout</button><button id="btn-clear" class="link danger">Clear</button></div></aside>
-<section class="workspace"><div class="canvas-bar"><span id="layout-caption">Tight board</span><span id="zoom-label">100%</span></div><canvas id="wall" aria-label="Image wall"></canvas><div id="empty" class="empty"><img src="./gelato-mark.svg" alt="" /><p class="empty-kicker">A LIGHTWEIGHT, LOCAL PHOTO WALL</p><h1>Your photos, all in one place.</h1><p class="empty-intro">See a whole folder at once. Find the shots you like and gather similar ones.</p><ul class="empty-benefits"><li><strong>Lightweight:</strong> small previews; full-size photos open only when you ask.</li><li><strong>Offline-friendly:</strong> organize in your browser after the page loads. Optional AI tools need internet.</li><li><strong>Private:</strong> your photos stay on your device. They are not uploaded.</li></ul><button id="btn-empty-folder" class="button primary">Choose a photo folder</button><button id="btn-sample" class="link">Try sample images</button></div><div id="no-matches" class="no-matches" hidden><b>Nothing to show in this view.</b><span>Try a different filter or bring the hidden frames back.</span><button id="btn-reset-filters" class="button">Show all matches</button></div><div class="hint">Click photo: Full-Res · Drag blank: Select · Blank click: Deselect · Drag photo: Move · Right-click photo: Pull 5 similar · Right-drag / Space-drag: Pan</div></section></main>
-<dialog id="viewer"><button id="btn-close" class="close">×</button><img id="full-image" alt="Full-resolution image" /><p id="full-caption"></p></dialog>
-<dialog id="duplicates-dialog" class="feature-dialog"><div class="feature-head"><div><p class="eyebrow">SIMILAR FRAMES</p><h2 id="duplicates-title">Review similar frames</h2><p id="duplicates-copy"></p></div><button class="close-dialog" data-close="duplicates-dialog">×</button></div><div id="duplicate-candidates" class="candidate-row"></div><p class="review-hint">Choose the frame you want to keep. The others are hidden from the wall, not deleted.</p><div class="feature-foot"><span id="duplicate-progress"></span><button id="duplicate-next" class="button primary">Next set</button></div></dialog>
-<dialog id="carousel-dialog" class="feature-dialog wide-dialog"><div class="feature-head"><div><p class="eyebrow">CAROUSEL IDEAS</p><h2>Three ways to tell the story</h2><p>Three editable starting points. The first run downloads CLIP image and text models; they are cached by your browser and matching runs locally. You choose every final image.</p></div><button class="close-dialog" data-close="carousel-dialog">×</button></div><label class="prompt-label">What should the photos show? <span>Optional</span><input id="carousel-subject" placeholder="e.g. speaker with slides, group shots, people dancing" /></label><div id="carousel-drafts" class="draft-grid"></div><div class="feature-foot"><label>Slides per draft <select id="carousel-count"><option>5</option><option selected>7</option><option>10</option></select></label><button id="btn-generate-drafts" class="button primary">Make drafts</button></div></dialog>
-<div id="active-draft-banner" class="active-draft-banner" hidden><span id="active-draft-name"></span><button id="btn-leave-draft" class="button">Show full library</button></div>
-<div id="toast" class="toast"></div><script type="module" src="./src/main.js"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <script>try { if (localStorage.getItem('gelato-theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch {}</script>
+  <title>Gelato — pick the photos worth posting</title>
+  <link rel="icon" href="./gelato-mark.svg" />
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Gelato"><img src="./gelato-mark.svg" width="22" height="22" alt="" />Gelato</a>
+
+    <div id="library" class="library" hidden>
+      <span id="library-name" class="library-name"></span>
+      <span id="library-count" class="library-count"></span>
+      <button id="btn-clear" class="icon-btn small" title="Close this library" aria-label="Close this library">×</button>
+    </div>
+
+    <div class="center-tools">
+    <nav id="views" class="seg views" aria-label="Arrange photos">
+      <button data-layout="pack" class="active" title="Every photo, packed tight · 1">Board</button>
+      <button data-layout="grid" title="In the order they were taken · 2">Timeline</button>
+      <button data-layout="pca" title="Similar look sits together (PCA) · 3">Vibe map</button>
+      <button data-layout="umap" title="Lookalikes form neighbourhoods (UMAP) · 4">Clusters</button>
+      <button data-layout="color" title="By hue and brightness · 5">Colour</button>
+    </nav>
+    <div id="sort-by" class="seg sort-by" role="group" aria-label="What counts as similar">
+      <button data-v="look" class="active" title="Similar colour, light and composition">By look</button>
+      <button data-v="content" title="Similar subject, using an on-device AI model (about 150 MB, downloaded once)">By content</button>
+    </div>
+    </div>
+
+    <div class="top-actions">
+      <button id="btn-duplicates" class="btn">Clear similar shots</button>
+      <button id="btn-carousel" class="btn accent">Draft a carousel</button>
+      <button id="btn-theme" class="icon-btn" title="Switch light / dark" aria-label="Switch light or dark theme">
+        <svg class="moon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8Z" fill="currentColor"/></svg>
+        <svg class="sun" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="10" cy="10" r="3.5" fill="currentColor"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.3 4.3l1.4 1.4M14.3 14.3l1.4 1.4M4.3 15.7l1.4-1.4M14.3 5.7l1.4-1.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <button id="btn-add" class="icon-btn" title="Add a folder" aria-label="Add a folder">
+        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <input id="folder-input" type="file" accept="image/*" webkitdirectory directory multiple hidden />
+    <input id="image-input" type="file" accept="image/*" multiple hidden />
+  </header>
+
+  <main class="stage">
+    <canvas id="wall" aria-label="Photo wall"></canvas>
+    <div id="import-progress" class="import-progress" hidden></div>
+    <div class="view-bar"><p id="view-note" class="view-note"></p><button id="btn-recluster" class="btn small" hidden title="Recompute the clusters with every photo, including new ones">Re-run clusters</button></div>
+
+    <section id="empty" class="empty">
+      <img src="./gelato-mark.svg" width="44" height="44" alt="" />
+      <h1>Pick the photos worth posting.</h1>
+      <p class="lede">Drop in a trip or event folder. See every shot at once, sort them by vibe, clear out the near-duplicates, and draft a carousel in seconds.</p>
+      <div class="empty-actions">
+        <button id="btn-empty-folder" class="btn accent large">Choose a folder</button>
+        <button id="btn-empty-files" class="btn large">Pick photos</button>
+      </div>
+      <p class="drop-hint">or drag a folder anywhere onto this window · <button id="btn-sample" class="link">try a sample trip</button></p>
+      <ul class="promises">
+        <li><b>Private</b>Photos stay on your computer. Nothing is uploaded.</li>
+        <li><b>Fast</b>Works from small previews. Full size opens only when you click.</li>
+        <li><b>Safe</b>Never moves, edits or deletes your files.</li>
+      </ul>
+    </section>
+
+    <div id="hidden-pill" class="pill top-left" hidden><span id="hidden-count"></span><button id="btn-restore" class="link">Show them</button></div>
+
+    <div id="draft-banner" class="pill top-center strong" hidden>
+      <span id="draft-name"></span>
+      <button id="btn-edit-draft" class="btn small">Edit</button>
+      <button id="btn-leave-draft" class="btn small">Back to all photos</button>
+    </div>
+
+    <div id="coach" class="coach" hidden>
+      <span><b>Tip:</b> right-click a photo to pull in 5 lookalikes. Click it again for 5 more.</span>
+      <button id="coach-close" class="icon-btn small" aria-label="Dismiss tip">×</button>
+    </div>
+
+    <div class="dock dock-left">
+      <button id="btn-zoom-out" class="icon-btn" title="Zoom out (−)" aria-label="Zoom out">−</button>
+      <span id="zoom-label" class="zoom-label">100%</span>
+      <button id="btn-zoom-in" class="icon-btn" title="Zoom in (+)" aria-label="Zoom in">+</button>
+      <button id="btn-fit" class="btn small" title="Fit everything in view (F)">Fit</button>
+      <span class="divider"></span>
+      <label class="size" title="Photo size"><svg viewBox="0 0 20 20" width="12" height="12" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="1.5" fill="currentColor"/></svg><input id="size-range" type="range" min="64" max="256" value="128" aria-label="Photo size" /><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><rect x="2" y="2" width="16" height="16" rx="2" fill="currentColor"/></svg></label>
+      <span class="divider"></span>
+      <button id="btn-reset" class="btn small ghost" title="Put every photo back where the view placed it">Reset</button>
+    </div>
+
+    <div id="selection-bar" class="dock dock-center" hidden>
+      <span id="selection-count" class="sel-count"></span>
+      <button id="btn-tidy" class="btn small">Tidy</button>
+      <button id="btn-carousel-from-selection" class="btn small">Carousel from these</button>
+      <button id="btn-copy" class="btn small">Save copies to folder…</button>
+      <button id="btn-deselect" class="icon-btn small" title="Clear selection (Esc)" aria-label="Clear selection">×</button>
+    </div>
+
+    <div class="dock dock-right">
+      <button id="btn-help" class="icon-btn" title="Shortcuts" aria-label="Shortcuts">?</button>
+    </div>
+    <div id="help" class="help" hidden>
+      <h3>Moving around</h3>
+      <dl>
+        <dt>Click photo</dt><dd>View full size</dd>
+        <dt>Right-click photo</dt><dd>Pull in 5 lookalikes</dd>
+        <dt>Drag photo</dt><dd>Move it (and the rest of the selection)</dd>
+        <dt>Drag empty space</dt><dd>Select a group · Shift adds</dd>
+        <dt>Right-drag · Space-drag</dt><dd>Pan</dd>
+        <dt>Scroll · pinch</dt><dd>Zoom</dd>
+        <dt>1 – 5</dt><dd>Switch view</dd>
+        <dt>F · Esc</dt><dd>Fit · clear selection</dd>
+      </dl>
+    </div>
+
+    <div class="drop-overlay" aria-hidden="true"><span>Drop photos or a folder to add them</span></div>
+  </main>
+
+  <dialog id="viewer" class="viewer">
+    <img id="full-image" alt="Full-size photo" />
+    <p id="full-caption"></p>
+  </dialog>
+
+  <dialog id="dupes-dialog" class="sheet">
+    <header class="sheet-head">
+      <div>
+        <p class="eyebrow">Clear similar shots</p>
+        <h2 id="dupes-title">Comparing…</h2>
+        <p id="dupes-sub" class="sub"></p>
+      </div>
+      <div class="head-tools">
+        <div id="dupes-level" class="seg small" role="group" aria-label="How similar">
+          <button data-v="strict" title="Only near-identical copies">Strict</button>
+          <button data-v="balanced" class="active" title="Bursts and re-takes">Balanced</button>
+          <button data-v="loose" title="Same moment, slightly different framing">Loose</button>
+        </div>
+        <button class="icon-btn" data-close aria-label="Close">×</button>
+      </div>
+    </header>
+    <div id="dupes-cards" class="shots"></div>
+    <footer class="sheet-foot">
+      <span id="dupes-progress" class="muted"></span>
+      <div id="dupes-actions" class="foot-actions">
+        <button id="dupes-auto" class="btn ghost"></button>
+        <button id="dupes-skip" class="btn">Skip</button>
+        <button id="dupes-apply" class="btn accent">Keep 1, hide the rest</button>
+      </div>
+    </footer>
+  </dialog>
+
+  <dialog id="carousel-dialog" class="sheet wide">
+    <header class="sheet-head">
+      <div>
+        <p class="eyebrow">Carousel</p>
+        <h2>Draft a carousel</h2>
+        <p class="sub">Say what the post needs. Gelato drafts one, and you swap anything you don’t like.</p>
+      </div>
+      <button class="icon-btn" data-close aria-label="Close">×</button>
+    </header>
+
+    <form id="carousel-form" class="brief">
+      <div class="field">
+        <span class="label">Slides</span>
+        <div id="slide-count" class="seg"><button type="button" data-v="5">5</button><button type="button" data-v="7" class="active">7</button><button type="button" data-v="10">10</button></div>
+      </div>
+      <div class="field">
+        <span class="label">From</span>
+        <div id="carousel-source" class="seg"><button type="button" data-v="all" class="active">All photos</button><button type="button" data-v="selected" id="source-selected">0 selected</button></div>
+      </div>
+      <label class="field grow">
+        <span class="label">Must include <em>optional</em></span>
+        <input id="carousel-musts" autocomplete="off" placeholder="e.g. Golden Gate Bridge, team dinner, sunset" />
+      </label>
+      <div class="field">
+        <span class="label">Shot mix <em>optional</em></span>
+        <div class="mix">
+          <label>Solo<input id="mix-solo" type="number" min="0" max="10" placeholder="–" /></label>
+          <label>Group<input id="mix-group" type="number" min="0" max="10" placeholder="–" /></label>
+          <label>Place<input id="mix-place" type="number" min="0" max="10" placeholder="–" /></label>
+        </div>
+      </div>
+      <label class="check"><input id="spread-days" type="checkbox" checked /> Spread across days</label>
+      <button id="btn-draft" class="btn accent">Draft it</button>
+    </form>
+    <p class="ai-note">Gelato picks varied, post-worthy shots with an AI model that runs on this computer. The first draft downloads it once (about 150 MB); your photos are never uploaded.</p>
+
+    <div id="carousel-progress" class="progress" hidden><div class="track"><i></i></div><span></span></div>
+    <ol id="slides" class="slides"></ol>
+
+    <footer id="carousel-foot" class="sheet-foot" hidden>
+      <span class="muted">Drag to reorder · the first slide is the cover</span>
+      <div class="foot-actions">
+        <button id="btn-show-carousel" class="btn">Show on wall</button>
+        <button id="btn-export-carousel" class="btn accent">Save in order to folder…</button>
+      </div>
+    </footer>
+  </dialog>
+
+  <div id="toast" class="toast" popover="manual" role="status"></div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
