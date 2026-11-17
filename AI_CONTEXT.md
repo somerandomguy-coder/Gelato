@@ -2,137 +2,77 @@
 
 ## One-line purpose
 
-Gelato is a local-first, non-technical image-space for photographers, designers, and creative people to drop in a large image folder, see it all at once, explore visual relationships, and curate it without having to understand datasets or machine learning.
+Gelato helps people who build a personal brand (LinkedIn, Instagram) go from a trip or event folder to the handful of photos worth posting: see everything, sort by vibe, clear near-duplicates, and draft a carousel. It runs locally in the browser.
 
-It borrows the performance and spatial-analysis strength of the sibling reference project `../VizThatThing`, but deliberately avoids its technical dataset/ML-workbench framing.
+## Who it is for and the jobs
+
+From user interviews: people currently scroll their camera roll, then describe the post out loud ("seven photos, three group and four solo, one at the Golden Gate Bridge, spread across each day") to an AI chat and review what it picks.
+
+| Need | Feature |
+| --- | --- |
+| See everything at once | Infinite canvas wall (pan, zoom, drag, select) |
+| Sort by vibe | Views: Board, Timeline, Vibe map (PCA), Clusters (UMAP), Colour |
+| Find more like this | Right-click a photo: pull in the 5 closest lookalikes, repeat for 5 more |
+| Too many near-duplicates | **Clear similar shots**: grouped bursts, keep the sharpest, hide the rest |
+| Save time choosing | **Draft a carousel**: slide count, must-include moments, solo/group/place mix, spread across days |
 
 ## Product principles
 
-1. **Show, don't configure.** Use plain-language controls such as “Visual map” rather than “PCA,” while retaining a quiet technical subtitle where helpful.
-2. **Local first.** Images and AI inference stay in the browser. Original files are never uploaded by Gelato.
-3. **Fast at photographer scale.** A folder of hundreds or a thousand images must feel responsive. The stage renders small worker-created thumbnails; originals only open when requested.
-4. **The canvas is the product.** The interface should prioritise direct manipulation, spatial thinking, and immediate feedback rather than panels of settings.
-5. **AI is opt-in and understandable.** Nothing large downloads until the user starts an AI action. Explain model size and retain local control over cache/labels.
-6. **Do not overclaim.** Face detection is not person recognition. A suggestion is editable; it is never presented as fact.
+1. **The canvas is the product.** Direct manipulation over settings panels.
+2. **Plain language.** "Vibe map", not "PCA" (technical names live only in tooltips).
+3. **Local first.** Photos never leave the device. Originals are only read for the full-size viewer and folder export.
+4. **Suggestions, not decisions.** Hidden shots are restorable; every carousel slide can be swapped, removed or reordered.
+5. **Do not overclaim.** The AI picks are suggestions; say what downloads and how big it is.
 
-## Intended audience and jobs
+## Stack and files
 
-- **Photographer:** dump a shoot folder, spot repetitions/outliers, find lookalikes, cluster colour/light moods, select frames, and name people manually.
-- **Designer/art director:** browse visual references, pull similar directions together, make a local composition, and identify a coherent visual territory.
-- **Personal-brand strategist:** get a bird's-eye visual read without needing image-analysis terminology.
-
-## Current stack
-
-- Vanilla HTML/CSS/ES modules, Vite only as a development/build tool.
-- A single HTML canvas is the wall. It avoids hundreds of expensive DOM image cards.
-- `src/image-worker.js` decodes an image, creates a maximum-256px `ImageBitmap`, calculates a perceptual hash, and extracts visual features off the main thread.
-- Original browser `File` objects remain in memory only for the on-demand full-resolution dialog and opt-in AI scans.
-- Production build: `npm run build`.
-
-## Important files
+Vanilla ES modules + canvas; Vite for dev/build only.
 
 | File | Responsibility |
 | --- | --- |
-| `index.html` | Minimal visible UI: upload, layouts, display, AI Lab, stage. |
-| `src/main.js` | Canvas renderer, interaction state, upload flow, layouts, KNN pull, selection, AI Lab. |
-| `src/image-worker.js` | Worker thumbnail decode/feature extraction and projection jobs. |
-| `src/image-metrics.js` | VizThatThing's 64-dimensional visual feature extraction. |
-| `src/projections.js` | VizThatThing's deterministic PCA and PCA-initialised UMAP algorithms. |
-| `src/viz-packer.js` | VizThatThing's growing bin-packer. |
-| `public/gelato-mark.svg` | Product mark. |
+| `index.html` | Top bar (views, actions), stage, docks, dialogs. |
+| `src/main.js` | State, import (picker + drag-drop), layouts, canvas drawing, pointer/keyboard, similar-shots review UI, carousel UI, folder export. |
+| `src/analysis.js` | Per-photo analysis on a ≤256px preview: 64-d look vector, pHash, sharpness, EXIF capture time. Shared by worker and fallback. |
+| `src/image-worker.js` | Off-thread analysis, PCA/UMAP projections, similar-set search. |
+| `src/duplicates.js` | Similar-shot grouping (pHash + standardised look + capture time + CLIP when present), best-frame suggestion. |
+| `src/carousel.js` | Carousel drafting: appeal scoring, shot classification, must-include matching, diversity, day spread, ordering, swap/add. |
+| `src/clip.js`, `src/clip-worker.js` | CLIP ViT-B/32 via Transformers.js in a worker. Lazy: nothing downloads until the first carousel draft. |
+| `src/image-metrics.js`, `src/projections.js`, `src/viz-packer.js` | Feature extraction, PCA/UMAP and the bin packer adapted from VizThatThing. |
 
-## Interaction contract — do not casually change this
+## Interaction contract
 
 | Gesture | Result |
 | --- | --- |
-| Left-click image | Open its original file in the full-resolution viewer. |
-| Left-drag blank canvas | Pan the stage. |
-| Mouse wheel | Cursor-centred zoom. |
-| Right-click image | Pull the five highest-similarity unseen images toward it; repeat for the next five. |
-| Shift + left-drag blank canvas | Marquee-select images. |
-| Tidy selection | Locally pack only the selection near its current position. |
-| Reset layout | Return all images to the active layout's canonical positions. |
+| Click photo | Open full size |
+| Drag photo | Move it (and the rest of the selection) |
+| Drag empty space | Marquee select (Shift adds) |
+| Click empty space | Clear selection |
+| Right-click photo | Pull 5 lookalikes; again for 5 more |
+| Right-drag, middle-drag, Space-drag | Pan |
+| Wheel / pinch | Cursor-centred zoom |
+| 1–5, F, Esc, Ctrl/Cmd+A | Switch view, fit, clear selection, select all |
 
-Avoid assigning two outcomes to the same gesture. This was a past UX failure.
+Never give one gesture two outcomes.
 
-## What works now
+## How the smart features work
 
-### Import and performance
+- **Similar shots.** Pairs match on any of: near-identical pHash; moderately close pHash + similar standardised look; same burst (capture times within seconds) + similar look; CLIP similarity once embeddings exist. Sets merge only when ≥60% of cross pairs match (prevents A~B~C chaining), capped at 16. The suggested keep is the sharpest, least-clipped frame. Strict / Balanced / Loose scale the thresholds. On a 233-photo real trip: old pHash-only found 9 pairs; Balanced finds ~48 sets.
+- **Carousel.** Always uses CLIP (about 156 MB, cached by the browser after first use; ~35 s for 233 photos once cached). Each photo gets an appeal score (two contrasting text prompts) and, if a mix is requested, a solo/group/place/other label. Slots are filled must-include first, then the mix, then free picks, scoring appeal + novelty + new-day bonus and skipping near-duplicates. The best photo leads as the cover; the rest are in capture order. The **By look / By content** switch in the top bar decides whether maps, pulls and similar-shot detection use the 64-d look vector or CLIP embeddings; switching to content embeds any photos that lack one, and photos added while in content mode are embedded before they join the maps.
 
-- Upload image files or an image folder (`webkitdirectory`).
-- Streaming import: decoded images appear during import rather than after the full folder completes.
-- Worker-side thumbnail generation, dimensions, perceptual hashes, and feature analysis.
-- Preview bitmaps capped at 256px; the wall starts with smaller 128px tiles. Originals are loaded only for detail view or AI work.
-- Page caps: 250, 500, 1,000, or All rendered images per page.
-- Worker-side projection calculations so PCA/UMAP don't freeze the canvas.
+## Map stability
 
-### Views
+- **Vibe map (PCA)** is fitted once per vector space; photos added later are projected onto the stored mean/axes/scale (`projectPCA`), so existing positions never move. It refits only when the vectors change (AI understanding switches on) or the library is cleared.
+- **Clusters (UMAP)** can't be extended, so new photos are placed at the average position of their 5 nearest neighbours. The **Re-run clusters** button (top of the Clusters view, highlighted with a count when there are new photos) recomputes UMAP over everything.
+- A moved photo's pull history resets, so right-clicking it again brings back its closest lookalikes.
 
-- **Tight board:** VizThatThing growing-bin packer.
-- **Browse:** scanning grid.
-- **Visual map:** VizThatThing PCA over 64-d visual features, or CLIP vectors after CLIP runs.
-- **Style neighbourhoods:** VizThatThing PCA-initialised UMAP over those vectors.
-- **Colour mood:** hue × brightness field.
-- PCA and UMAP display human-readable axes.
+## Deliberately removed
 
-### Curation
+Face scan, people scan, AI Lab panel, manual people names, pagination, caption and spacing toggles. Don't add back dataset/ML-workbench features (CSV, YOLO, confidence charts, K-means islands).
 
-- Pan, zoom, fit view, caption toggle, spacing toggle, thumbnail-size control.
-- KNN pulls with easing animation.
-- Local marquee selection and tidy pack.
-- Reset back to canonical layout positions.
-- Review near-duplicate frames using perceptual hashes; chosen rejects are hidden from the wall and can be restored.
-- Draft three editable carousel directions with local CLIP text/image matching and a diversity pass. The user chooses the final images.
+## Cautions
 
-### AI Lab (all on demand)
-
-- **Face scan:** MediaPipe BlazeFace (~230 KB) reports per-image face count.
-- **People scan:** MediaPipe person detector (~4.6 MB) reports per-image person count.
-- **Understand images:** CLIP ViT-B/32 image and text components create semantic image embeddings for KNN, maps, and carousel drafts; the first run is a large browser-cached download.
-- AI model cache: face/person assets use `gelato-ai-models-v1`; CLIP uses Transformers.js browser cache. A clear-cache control exists.
-- Filter chips after scans: All / none / one / 2+ faces or people.
-- Manual people workflow: Shift-select photos then use **Name people**. This is a local editable label displayed as an image badge.
-
-## Deliberate exclusions
-
-Do not add these unless the product brief changes:
-
-- CSV export/import and technical annotations.
-- ZIP/YOLO import, detection datasets, confidence charts, model-evaluation dashboards.
-- Split viewport comparisons.
-- K-Means cluster-island UI.
-- Technical “dataset”, “prediction”, or “accuracy” terminology.
-
-## Honest implementation limits / next important work
-
-1. **Validate the large-folder path in a real browser.** The worker pipeline is implemented, but performance testing should use 1,000 real JPEGs and memory/timeline profiling.
-2. **Page-aware layout.** Pagination caps rendering, but pack/grid still calculate canonical positions across the complete library. Improve the active-page fit and paging UX if it feels sparse.
-3. **KNN placement parity.** Gelato has animated ring pulls, but VizThatThing's collision-aware repeated-ring placement should be ported fully if dense boards overlap.
-4. **AI inference quality.** Face/person detectors use a temporary 640px canvas decoded from the original `File`, matching the reference workbench's approach.
-5. **People suggestions.** Face detection alone cannot identify people. A proper same-person suggestion feature needs a face-embedding model, local clustering, a review screen, merge/split controls, and named local groups. Follow the Google Photos pattern: suggestions are editable; names are private/local; people can be removed or reassigned.
-6. **CLIP themes.** Add editable, plain-language theme chips (for example portrait, street, nature) using zero-shot CLIP text prompts, like VizThatThing, but keep the UX simple.
-7. **Tests.** Add browser-level tests for import, selection, pointer precedence, worker fallback, paging, and full-resolution open/close URL cleanup.
-
-## Known technical cautions
-
-- Image imports must stay responsive: do not decode a full folder on the main thread.
-- Preserve `File` objects, but never render originals to the stage.
-- Worker support must retain a main-thread fallback for browsers without `OffscreenCanvas`.
-- `ImageBitmap.close()` should be called when clearing/replacing thumbnails.
-- Cache Storage is browser/profile local and can be evicted; never promise permanent storage.
-- Remote AI model downloads require network access only after an explicit user click.
-- Face/person labels and models are sensitive local information; never transmit them without explicit permission.
-
-## Reference relationship
-
-`../VizThatThing` is the behavioral/performance source of truth for retained canvas features. Gelato should reuse or port its proven computation and interaction patterns, then simplify wording and presentation. Do not copy its technical dashboard wholesale.
-
-## Definition of done for a new feature
-
-Before calling a feature complete, verify:
-
-1. It works with the gesture contract above.
-2. It has a non-technical visible label and understandable empty/error state.
-3. It does not block the main thread during large imports or analysis.
-4. It is local-first by default.
-5. The production Vite build passes.
+- Keep imports off the main thread; never draw originals to the canvas.
+- HEIC can't be decoded by browsers: tell people to export JPEG.
+- Folder export needs the File System Access API (Chromium desktop).
+- Cache Storage can be evicted; never promise permanent model storage.
+- `npm run build` must pass before calling a change done.
