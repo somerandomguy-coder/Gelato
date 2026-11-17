@@ -636,7 +636,9 @@ async function draftIt() {
     progress('Starting the on-device AI model…');
     await embedImages(pool, onProgress);
     car.appealVectors ||= await embedText(APPEAL_PROMPTS, onProgress);
-    scoreAppeal(pool, car.appealVectors);
+    const feel = $('#carousel-feel').value.trim();
+    const [feelVector] = feel ? await embedText([feel], onProgress) : [null];
+    scoreAppeal(pool, car.appealVectors, feelVector);
     if (mix) { car.shotVectors ||= await embedText(Object.values(SHOT_PROMPTS), onProgress); classifyShots(pool, car.shotVectors); }
     if (musts.length) mustVectors = await embedText(musts, onProgress);
     car.opts = { spreadDays };
@@ -734,6 +736,17 @@ $('#btn-theme').onclick = () => {
   theme = readTheme(); requestDraw();
 };
 $('#btn-recluster').onclick = rerunClusters;
+// One how-to, shown in the ? card and behind "How does this work?" in the carousel dialog.
+document.querySelectorAll('.howto-slot').forEach(slot => slot.append($('#carousel-howto').content.cloneNode(true)));
+$('#btn-howto').onclick = () => { const p = $('#howto-panel'); p.hidden = !p.hidden; $('#btn-howto').textContent = p.hidden ? 'How does this work?' : 'Hide tips'; };
+// Example chips add their phrase to the field (comma-separated for moments, replacing for feel).
+document.querySelectorAll('.chips').forEach(group => group.onclick = (e) => {
+  const chip = e.target.closest('button'); if (!chip) return;
+  const input = $('#' + group.dataset.for), word = chip.textContent;
+  if (group.dataset.for === 'carousel-feel') input.value = word;
+  else { const parts = input.value.split(',').map(x => x.trim()).filter(Boolean); if (!parts.includes(word)) parts.push(word); input.value = parts.join(', '); }
+  input.focus();
+});
 $('#sort-by').onclick = (e) => { const b = e.target.closest('[data-v]'); if (b && state.items.length) setSortBy(b.dataset.v === 'content'); };
 $('#btn-help').onclick = () => { $('#help').hidden = !$('#help').hidden; };
 document.querySelectorAll('[data-close]').forEach(b => { b.onclick = () => b.closest('dialog').close(); });

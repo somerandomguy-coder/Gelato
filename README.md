@@ -20,7 +20,7 @@ Start by choosing or dropping a folder, or try the built-in sample trip:
 - **Sort by vibe.** Switch between Board, Timeline, Vibe map, Clusters and Colour views, and between **By look** (colour, light, composition) and **By content** (what's in the photo, using an on-device AI model). Adding photos never reshuffles the Vibe map; Clusters can be re-run on demand.
 - **Find more like this.** Right-click any photo to pull in its five closest lookalikes, then right-click again for five more.
 - **Clear similar shots.** Gelato groups bursts and re-takes, suggests the sharpest frame, and hides the rest (nothing is deleted).
-- **Draft a carousel.** Choose 5, 7 or 10 slides, name any must-have moments ("Golden Gate Bridge, team dinner"), set a solo/group/place mix, and spread the picks across days. Swap, remove or reorder any slide, then save the set to a folder in order.
+- **Draft a carousel.** Choose 5, 7 or 10 slides and Gelato picks varied, eye-catching shots. Optionally name moments to include ("lighthouse, team dinner", one slide each), an overall feel ("golden hour"), a solo/group/place mix, and spread the picks across days. Swap, remove or reorder any slide, then save the set to a folder in order. The **?** button has a short how-to.
 
 ## Run Gelato
 

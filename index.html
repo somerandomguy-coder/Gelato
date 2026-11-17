@@ -116,7 +116,19 @@
         <dt>1 – 5</dt><dd>Switch view</dd>
         <dt>F · Esc</dt><dd>Fit · clear selection</dd>
       </dl>
+      <h3>Drafting a carousel</h3>
+      <div class="howto-slot"></div>
     </div>
+    <template id="carousel-howto">
+      <ol class="howto">
+        <li><b>Pick how many slides.</b> Leave the rest empty and Gelato picks varied, eye-catching shots for you.</li>
+        <li><b>Moments to include</b> are things that must be in the post, like “lighthouse” or “team dinner”. Each one gets its own slide.</li>
+        <li><b>Overall feel</b> nudges every pick towards a look, like “golden hour” or “black and white”.</li>
+        <li><b>Shot mix</b> sets how many solo, group and place shots you want.</li>
+        <li>Then <b>↻ Swap</b> any slide you don’t like and drag to reorder. Slide 1 is the cover.</li>
+      </ol>
+      <p class="howto-tip">Tip: describe what you can see (“coffee cup”, “stage”, “beach”) rather than how it feels (“happy”).</p>
+    </template>
 
     <div class="drop-overlay" aria-hidden="true"><span>Drop photos or a folder to add them</span></div>
   </main>
@@ -158,11 +170,12 @@
       <div>
         <p class="eyebrow">Carousel</p>
         <h2>Draft a carousel</h2>
-        <p class="sub">Say what the post needs. Gelato drafts one, and you swap anything you don’t like.</p>
+        <p class="sub">Say what the post needs. Gelato drafts one, and you swap anything you don’t like. <button type="button" id="btn-howto" class="link">How does this work?</button></p>
       </div>
       <button class="icon-btn" data-close aria-label="Close">×</button>
     </header>
 
+    <div id="howto-panel" class="howto-panel howto-slot" hidden></div>
     <form id="carousel-form" class="brief">
       <div class="field">
         <span class="label">Slides</span>
@@ -172,10 +185,6 @@
         <span class="label">From</span>
         <div id="carousel-source" class="seg"><button type="button" data-v="all" class="active">All photos</button><button type="button" data-v="selected" id="source-selected">0 selected</button></div>
       </div>
-      <label class="field grow">
-        <span class="label">Must include <em>optional</em></span>
-        <input id="carousel-musts" autocomplete="off" placeholder="e.g. Golden Gate Bridge, team dinner, sunset" />
-      </label>
       <div class="field">
         <span class="label">Shot mix <em>optional</em></span>
         <div class="mix">
@@ -185,6 +194,17 @@
         </div>
       </div>
       <label class="check"><input id="spread-days" type="checkbox" checked /> Spread across days</label>
+      <span class="row-break" aria-hidden="true"></span>
+      <div class="field grow">
+        <label class="label" for="carousel-musts">Moments to include <em>optional · one slide each</em></label>
+        <input id="carousel-musts" autocomplete="off" placeholder="e.g. lighthouse, team dinner, me on stage" />
+        <div class="chips" data-for="carousel-musts"><button type="button">beach</button><button type="button">dinner table</button><button type="button">group photo</button><button type="button">city at night</button><button type="button">speaking on stage</button></div>
+      </div>
+      <div class="field grow">
+        <label class="label" for="carousel-feel">Overall feel <em>optional</em></label>
+        <input id="carousel-feel" autocomplete="off" placeholder="e.g. golden hour, moody, bright and airy" />
+        <div class="chips" data-for="carousel-feel"><button type="button">golden hour</button><button type="button">moody</button><button type="button">bright and airy</button><button type="button">black and white</button></div>
+      </div>
       <button id="btn-draft" class="btn accent">Draft it</button>
     </form>
     <p class="ai-note">Gelato picks varied, post-worthy shots with an AI model that runs on this computer. The first draft downloads it once (about 150 MB); your photos are never uploaded.</p>

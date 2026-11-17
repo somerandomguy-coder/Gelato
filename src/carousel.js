@@ -29,8 +29,9 @@ export function classifyShots(items, shotVectors) {
 }
 
 /** Score how post-worthy each photo looks, from its CLIP embedding. */
-export function scoreAppeal(items, [good, bad]) {
-  for (const item of items) if (item.embedding) item.appeal = dot(item.embedding, good) - dot(item.embedding, bad);
+// An optional "overall feel" (e.g. "golden hour") tilts every pick towards that look.
+export function scoreAppeal(items, [good, bad], feel = null) {
+  for (const item of items) if (item.embedding) item.appeal = dot(item.embedding, good) - dot(item.embedding, bad) + (feel ? 1.5 * dot(item.embedding, feel) : 0);
 }
 
 const percentiles = (values) => {
