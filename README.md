@@ -6,6 +6,14 @@ Gelato turns a trip or event folder into one visual wall, so you can sort shots 
 
 ![A Wollongong trip folder laid out on Gelato's Vibe map](docs/images/gelato-wollongong-wall.png)
 
+Right-click any photo to pull in its five closest lookalikes. Here a lighthouse shot was dragged into empty space and gathered two more lighthouses and three sea views:
+
+![Pulling five lookalikes around a lighthouse photo](docs/images/gelato-pull-similar.png)
+
+Clear out bursts and re-takes. Gelato groups near-identical frames, suggests the sharpest, and hides the rest without deleting anything:
+
+![Reviewing two near-identical coastline frames, with the sharper one kept](docs/images/gelato-similar-shots.png)
+
 Draft a carousel from the whole folder: name the moments you need and the shot mix, then swap anything you don't like.
 
 ![Drafting a seven-slide carousel with a lighthouse and rocky coastline](docs/images/gelato-carousel.png)
